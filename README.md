@@ -4,6 +4,12 @@ POE2 Filter Sound Studio is a desktop tool for editing Path of Exile 2
 `.filter` files. It focuses on custom alert sounds, volume changes, sound-file
 health checks, color rules, and season-to-season sound migration.
 
+![Main editor — Witch (Necro Purple) theme](docs/editor-witch-purple.png)
+
+> **Want the standalone Windows EXE?** Grab `App_v3.exe` from the
+> [Releases page](https://github.com/xtheredshirtx/poe2-filter-sound-studio/releases)
+> — no Python install required, FFmpeg bundled.
+
 The current source entry point is `main.py`.
 
 App identity in code:
@@ -11,6 +17,23 @@ App identity in code:
 - Name: `POE2 Filter Sound Studio`
 - Version: `2.0.0`
 - Main UI framework: `customtkinter` plus standard `tkinter`
+
+## Screenshots
+
+| Smart Season Migration | Filter Compatibility Check |
+| :-: | :-: |
+| ![Merge tab](docs/merge-tab.png) | ![Compatibility check](docs/compatibility-check.png) |
+| Transfer custom sounds from an old season filter to a new one via fuzzy matching. | Spot unknown commands and outdated rules; apply migration rules in bulk. |
+
+| Edit Text Color | Edit Background Color |
+| :-: | :-: |
+| ![Text color dialog](docs/color-text.png) | ![Background color dialog](docs/color-background.png) |
+| RGBA picker with live preview of `SetTextColor`. | Same for `SetBackgroundColor`; alpha slider included. |
+
+| Make Sounds Unique | Mercenary (Crimson) Theme |
+| :-: | :-: |
+| ![Make sounds unique](docs/make-sounds-unique.png) | ![Editor in crimson theme](docs/editor-mercenary-crimson.png) |
+| Distribute available sound files across visible blocks (1:1, balanced, or random). | Built-in palettes per POE2 class — switch live from the Mode dropdown. |
 
 ## What This Tool Does
 
