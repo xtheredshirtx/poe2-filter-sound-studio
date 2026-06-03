@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "_about": "Filter Compatibility Rules — edit me freely. The app reloads this on every filter load.",
+  "_rule_schema": {
+    "id": "unique-string — shown in the report",
+    "description": "human-readable explanation of what this rule does/why",
+    "match_type": "command | regex | allow",
+    "pattern": "command name (for command/allow) OR regex pattern (for regex)",
+    "replacement": "full new line text (no leading indent or newline — both preserved automatically). Supports $1/$2 backrefs in regex mode.",
+    "rename_to": "alternative to replacement: just the new command name; keeps args + comments intact",
+    "action": "replace | remove | allow",
+    "enabled": "true | false",
+    "kind": "rename | deprecated | replace | remove (cosmetic label only, used for grouping in the UI)"
+  },
+
+  "rules": [
+    {
+      "id": "example-rename-OldSoundCommand",
+      "description": "Example: rename a hypothetical OldSoundCommand to CustomAlertSound.",
+      "match_type": "command",
+      "pattern": "OldSoundCommand",
+      "rename_to": "CustomAlertSound",
+      "action": "replace",
+      "kind": "rename",
+      "enabled": false
+    },
+    {
+      "id": "example-replace-fixed-line",
+      "description": "Example: replace `DisableDropSound True` (legacy boolean form) with the bare command.",
+      "match_type": "regex",
+      "pattern": "^DisableDropSound\\s+True\\s*$",
+      "replacement": "DisableDropSound",
+      "action": "replace",
+      "kind": "deprecated",
+      "enabled": false
+    },
+    {
+      "id": "example-remove-command",
+      "description": "Example: strip out any line using a command the game removed.",
+      "match_type": "command",
+      "pattern": "RemovedCommand",
+      "action": "remove",
+      "kind": "remove",
+      "enabled": false
+    },
+    {
+      "id": "example-allow-new-command",
+      "description": "Example: tell the validator a new condition is legal. Add one of these whenever GGG ships a new command so it stops being flagged as 'unknown'.",
+      "match_type": "allow",
+      "pattern": "SomeNewCondition",
+      "action": "allow",
+      "enabled": false
+    }
+  ]
+}

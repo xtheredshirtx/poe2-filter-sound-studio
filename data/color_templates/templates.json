@@ -1,0 +1,84 @@
+{
+  "templates": [
+    {
+      "name": "Unique - Gold",
+      "description": "Classic gold theme for unique items",
+      "text_color": [175, 96, 37, 255],
+      "border_color": [175, 96, 37, 255],
+      "bg_color": [50, 27, 10, 200],
+      "tags": ["unique", "rare", "valuable"]
+    },
+    {
+      "name": "Currency - Green",
+      "description": "Bright green for currency items",
+      "text_color": [170, 158, 130, 255],
+      "border_color": [255, 255, 255, 255],
+      "bg_color": [0, 0, 0, 200],
+      "tags": ["currency", "important"]
+    },
+    {
+      "name": "Rare - Yellow",
+      "description": "Standard yellow theme for rare items",
+      "text_color": [255, 255, 119, 255],
+      "border_color": [255, 255, 119, 255],
+      "bg_color": [50, 50, 20, 180],
+      "tags": ["rare", "crafting"]
+    },
+    {
+      "name": "Maps - Purple",
+      "description": "Purple theme for maps",
+      "text_color": [130, 90, 160, 255],
+      "border_color": [130, 90, 160, 255],
+      "bg_color": [25, 15, 35, 200],
+      "tags": ["maps", "endgame"]
+    },
+    {
+      "name": "Danger - Red",
+      "description": "Bright red for dangerous or important items",
+      "text_color": [255, 0, 0, 255],
+      "border_color": [255, 0, 0, 255],
+      "bg_color": [50, 0, 0, 220],
+      "tags": ["warning", "important", "danger"]
+    },
+    {
+      "name": "Safe - Green",
+      "description": "Calming green for safe items",
+      "text_color": [0, 255, 100, 255],
+      "border_color": [0, 255, 100, 255],
+      "bg_color": [0, 40, 20, 180],
+      "tags": ["safe", "common"]
+    },
+    {
+      "name": "Highlight - Cyan",
+      "description": "Bright cyan to highlight specific items",
+      "text_color": [0, 255, 255, 255],
+      "border_color": [0, 255, 255, 255],
+      "bg_color": [0, 40, 40, 200],
+      "tags": ["highlight", "special"]
+    },
+    {
+      "name": "Divine - White/Gold",
+      "description": "Divine orb style - white text with gold border",
+      "text_color": [255, 255, 255, 255],
+      "border_color": [200, 150, 0, 255],
+      "bg_color": [30, 30, 30, 220],
+      "tags": ["divine", "valuable", "currency"]
+    },
+    {
+      "name": "Gem - Teal",
+      "description": "Teal theme for skill gems",
+      "text_color": [27, 162, 155, 255],
+      "border_color": [27, 162, 155, 255],
+      "bg_color": [10, 40, 40, 180],
+      "tags": ["gems", "skills"]
+    },
+    {
+      "name": "Essence - Purple/Blue",
+      "description": "Purple/blue theme for essences",
+      "text_color": [186, 85, 211, 255],
+      "border_color": [100, 149, 237, 255],
+      "bg_color": [30, 20, 50, 200],
+      "tags": ["essence", "crafting"]
+    }
+  ]
+}
