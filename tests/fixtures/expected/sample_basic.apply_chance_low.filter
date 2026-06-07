@@ -37,16 +37,9 @@ Show
 	MinimapIcon 0 Purple Star
 
 Show
-	# [ETVP tier=B template="High Contrast Economy Tiers" v=1]
 	Class "Rings"
 	Rarity Magic
 	BaseType "Sapphire Ring"
-	SetTextColor 255 255 255 255
-	SetBorderColor 120 255 120 220
-	SetBackgroundColor 40 120 60 190
-	SetFontSize 38
-	PlayEffect Green Temp
-	MinimapIcon 2 Green Circle
 
 # [[3000]] Waystones
 
