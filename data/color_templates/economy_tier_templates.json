@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "templates": [
+    {
+      "name": "High Contrast Economy Tiers",
+      "description": "Default economy-tier styling. Same value tier looks identical across every item category. Loud high tiers, muted low tiers. Never carries sound directives.",
+      "tiers": {
+        "SS_CHANCE_BASE": {
+          "text_color": [255, 255, 255, 255],
+          "bg_color": [130, 0, 255, 235],
+          "border_color": [255, 215, 0, 255],
+          "font_size": 45,
+          "play_effect": ["Purple", true],
+          "minimap": [0, "Purple", "Star"]
+        },
+        "SS": {
+          "text_color": [255, 255, 255, 255],
+          "bg_color": [180, 20, 20, 230],
+          "border_color": [255, 215, 0, 255],
+          "font_size": 45,
+          "play_effect": ["Red", true],
+          "minimap": [0, "Red", "Star"]
+        },
+        "S": {
+          "text_color": [255, 255, 255, 255],
+          "bg_color": [255, 110, 0, 220],
+          "border_color": [255, 255, 255, 255],
+          "font_size": 43,
+          "play_effect": ["Orange", true],
+          "minimap": [1, "Orange", "Star"]
+        },
+        "A": {
+          "text_color": [255, 255, 255, 255],
+          "bg_color": [30, 120, 255, 210],
+          "border_color": [150, 220, 255, 255],
+          "font_size": 41,
+          "play_effect": ["Blue", true],
+          "minimap": [1, "Blue", "Circle"]
+        },
+        "B": {
+          "text_color": [255, 255, 255, 255],
+          "bg_color": [40, 120, 60, 190],
+          "border_color": [120, 255, 120, 220],
+          "font_size": 38,
+          "play_effect": ["Green", true],
+          "minimap": [2, "Green", "Circle"]
+        },
+        "C": {
+          "text_color": [220, 220, 220, 255],
+          "bg_color": [45, 45, 45, 170],
+          "border_color": [120, 120, 120, 200],
+          "font_size": 35
+        },
+        "D": {
+          "text_color": [160, 160, 160, 220],
+          "bg_color": [20, 20, 20, 120],
+          "border_color": [70, 70, 70, 150],
+          "font_size": 32
+        },
+        "F": {
+          "text_color": [100, 100, 100, 180],
+          "bg_color": [0, 0, 0, 80],
+          "border_color": [40, 40, 40, 120],
+          "font_size": 30
+        }
+      }
+    }
+  ]
+}

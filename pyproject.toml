@@ -1,0 +1,60 @@
+# Tooling configuration. Scoped to the additive `economy_tier` feature (and its
+# UI/tests/tools) so running these tools never reformats or re-types the
+# pre-existing app code. Invoke explicitly on the new paths, e.g.:
+#   black economy_tier ui/economy_tier_ui.py tools tests
+#   ruff check economy_tier ui/economy_tier_ui.py tools tests
+#   mypy economy_tier
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# Only lint the new feature's code by default.
+include = [
+    "economy_tier/**/*.py",
+    "ui/economy_tier_ui.py",
+    "tools/**/*.py",
+    "tests/**/*.py",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+# Line length is governed by black; allow long lines ruff would otherwise flag.
+# UP042: keep `(str, Enum)` rather than `StrEnum` for broad Python compatibility
+# and stable str() behaviour (mode values are used as UI labels + JSON).
+ignore = ["E501", "UP042"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["economy_tier"]
+# The existing app modules are untyped; don't let strict mode fail on them or on
+# third-party packages that ship no stubs.
+[[tool.mypy.overrides]]
+module = [
+    "features.*",
+    "core.*",
+    "ui.*",
+    "customtkinter.*",
+    "vlc.*",
+    "pygame.*",
+    "pydub.*",
+    "playsound.*",
+    "jsonschema.*",
+]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["economy_tier"]
+omit = ["economy_tier/schemas/*"]
+
+[tool.coverage.report]
+show_missing = true

@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Economy Tier Visual Templates",
+  "type": "object",
+  "required": ["schema_version", "templates"],
+  "additionalProperties": true,
+  "definitions": {
+    "rgba": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 4,
+      "items": { "type": "integer", "minimum": 0, "maximum": 255 }
+    },
+    "playEffect": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": [{ "type": "string" }, { "type": "boolean" }]
+    },
+    "minimap": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": [
+        { "type": "integer", "minimum": 0, "maximum": 2 },
+        { "type": "string" },
+        { "type": "string" }
+      ]
+    },
+    "tierStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text_color": { "$ref": "#/definitions/rgba" },
+        "bg_color": { "$ref": "#/definitions/rgba" },
+        "border_color": { "$ref": "#/definitions/rgba" },
+        "font_size": { "type": "integer", "minimum": 1, "maximum": 60 },
+        "play_effect": { "$ref": "#/definitions/playEffect" },
+        "minimap": { "$ref": "#/definitions/minimap" }
+      }
+    }
+  },
+  "properties": {
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "templates": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "tiers"],
+        "additionalProperties": true,
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "tiers": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": { "$ref": "#/definitions/tierStyle" }
+          }
+        }
+      }
+    }
+  }
+}
