@@ -44,6 +44,17 @@ APP_SHORT = "Filter Sound Studio"
 APP_VERSION = "2.0.0"
 APP_TAGLINE = "Path of Exile 2 item-filter sound and category editor"
 
+# Economy Tier Visual Preset dropdown options (canonical order; see economy_tier
+# package). Kept as a literal here so the main window builds even if the optional
+# economy_tier dependencies are unavailable; the feature is imported lazily.
+ECONOMY_TIER_MODES = [
+    "Off",
+    "Preview Only",
+    "Apply Economy Tier Visuals",
+    "Apply Economy Tier Visuals Plus Chance Base Boost",
+    "Restore Previous Visuals",
+]
+
 
 def _resolve_icon_path() -> str:
     """Return the absolute path to the bundled app icon, or '' if none exists."""
@@ -262,6 +273,18 @@ class FilterSoundEditor:
         self.load_button = ctk.CTkButton(top_controls, text="📂 Load Filter File", command=self.load_filter, width=150)
         self.load_button.pack(side="left", padx=(10, 10), pady=10)
 
+        # Economy Tier Visual Preset: instantly restyle the filter by value tier.
+        # Acts as an action trigger -- choosing a mode opens the preview dialog,
+        # then the dropdown resets to "Off". Default is "Off" (does nothing).
+        self.economy_mode_selector = ctk.CTkOptionMenu(
+            top_controls,
+            values=ECONOMY_TIER_MODES,
+            command=self._on_economy_mode_selected,
+            width=270,
+        )
+        self.economy_mode_selector.set("Off")
+        self.economy_mode_selector.pack(side="left", padx=(0, 10), pady=10)
+
         self.search_box = ctk.CTkEntry(top_controls, height=36,
                                        placeholder_text="Search rarity, sound, id, effect, minimap, class, basetype... (Ctrl+F)")
         self.search_box.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=10)
@@ -347,6 +370,7 @@ class FilterSoundEditor:
         tm.register_widget(self.load_button, tm.ROLE_PRIMARY)
         tm.register_widget(self.search_box, tm.ROLE_ENTRY)
         tm.register_widget(self.hide_no_sound_cb, tm.ROLE_CHECKBOX)
+        tm.register_widget(self.economy_mode_selector, tm.ROLE_GHOST)
         tm.register_widget(self.theme_selector, tm.ROLE_GHOST)
         tm.register_widget(self.appearance_selector, tm.ROLE_GHOST)
         tm.register_widget(self.file_label, tm.ROLE_TEXT_MUTED)
@@ -783,6 +807,7 @@ class FilterSoundEditor:
         tools_menu.add_separator()
         tools_menu.add_command(label="Emphasize by Tier…", command=self.emphasize_by_tier)
         tools_menu.add_command(label="Randomize Visuals…", command=self.randomize_visuals)
+        tools_menu.add_command(label="Economy Tier Visuals…", command=self.open_economy_tier_visuals)
         tools_menu.add_separator()
         tools_menu.add_command(label="Sound File Manager…", command=self.open_sound_manager)
         tools_menu.add_command(label="Filter Statistics…", command=self.show_filter_statistics)
@@ -2453,6 +2478,35 @@ class FilterSoundEditor:
     def randomize_visuals(self):
         """Tools menu entry — open Visual Tools on the Randomize tab."""
         open_visual_tools(self, start_tab="randomize")
+
+    def open_economy_tier_visuals(self, start_mode=None):
+        """Open the Economy Tier Visual Preset dialog.
+
+        Imported lazily so the app still launches if the feature's optional
+        dependencies (e.g. jsonschema) are missing — the user just gets a clear
+        message instead of a startup crash.
+        """
+        try:
+            from ui.economy_tier_ui import open_economy_tier_tools
+        except Exception as e:  # pragma: no cover - import guard
+            messagebox.showerror(
+                "Economy Tier Visuals",
+                f"This feature could not be loaded:\n{e}\n\n"
+                "Install requirements (pip install -r requirements.txt) and retry.",
+            )
+            return
+        open_economy_tier_tools(self, start_mode=start_mode)
+
+    def _on_economy_mode_selected(self, value):
+        """Main-window dropdown handler. Opens the dialog on the chosen mode,
+        then resets to 'Off' so the dropdown behaves as an action trigger."""
+        try:
+            self.economy_mode_selector.set("Off")
+        except Exception:
+            pass
+        if not value or value == "Off":
+            return
+        self.open_economy_tier_visuals(start_mode=value)
 
     def _run_compatibility_check(self, auto: bool = False) -> None:
         """Scan the current filter for unknown commands, deprecated syntax,

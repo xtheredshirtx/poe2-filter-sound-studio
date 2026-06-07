@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "game": "Path of Exile 2",
+  "patch": "0.5.0",
+  "league": "Runes of Aldur (Return of the Ancients)",
+  "last_updated": "2026-06-07",
+  "notes": "Tiers reflect relative trade value/demand early-to-mid 0.5. Economy drifts; refresh via tools/update_economy_tiers.py. Boss-only uniques are NOT chanceable and must not appear in chance_bases.",
+  "sources": [
+    { "name": "Official PoE 2 site / patch notes", "url": "https://www.pathofexile.com", "checked_at": "2026-06-07", "notes": "0.5 Return of the Ancients; Recombinator removed, Verisium Runeforging added." },
+    { "name": "Official Trade 2 + Currency Exchange", "url": "https://www.pathofexile.com/trade2", "checked_at": "2026-06-07", "notes": "Confirm live listing volume before promoting any chase item." },
+    { "name": "Maxroll - Best Unique Items to Chance", "url": "https://maxroll.gg/poe2/meta/best-unique-items-to-chance", "checked_at": "2026-06-07", "notes": "Chance base -> unique mappings and rarity tiers; 0.5 update incl. Mageblood, Tangletongue." },
+    { "name": "Boostmatch - PoE 2 Currency Guide 0.5.0", "url": "https://boostmatch.gg/blog/poe-2/articles/poe2-currency-guide-patch-050-runes-of-aldur", "checked_at": "2026-06-07", "notes": "Orb roles + rough Ex/Div denominations; Lineage Support Gems as top trade target." },
+    { "name": "poe.ninja (PoE2)", "url": "https://poe.ninja", "checked_at": "2026-06-07", "notes": "Use for live relative pricing where PoE2 data is populated." },
+    { "name": "FilterBlade / NeverSink PoE2", "url": "https://www.filterblade.xyz", "checked_at": "2026-06-07", "notes": "Canonical chancing-base list and category conventions." }
+  ],
+  "tiers": {
+    "SS": [
+      { "name": "Mirror of Kalandra", "match_type": "Currency", "tier": "SS", "reason": "~565 Div; rarest tradeable orb", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Astramentis", "match_type": "Unique", "tier": "SS", "reason": "Tier-0 chase amulet (Stellar Amulet base)", "confidence": "high", "source_refs": ["Maxroll"] },
+      { "name": "Dream Fragments", "match_type": "Unique", "tier": "SS", "reason": "Tier-0 chase ring (Sapphire Ring base)", "confidence": "high", "source_refs": ["Maxroll"] },
+      { "name": "Headhunter", "match_type": "Unique", "tier": "SS", "reason": "Very high value belt (Heavy Belt base)", "confidence": "high", "source_refs": ["Maxroll"] },
+      { "name": "Mageblood", "match_type": "Unique", "tier": "SS", "reason": "Pinnacle global-drop belt returning in 0.5", "confidence": "medium", "source_refs": ["Maxroll"] }
+    ],
+    "S": [
+      { "name": "Divine Orb", "match_type": "Currency", "tier": "S", "reason": "Premium denomination (~88 Ex)", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Perfect Jeweller's Orb", "match_type": "Currency", "tier": "S", "reason": "Max-socket enabler; scarce", "confidence": "medium", "source_refs": ["Boostmatch"] },
+      { "name": "Fracturing Orb", "match_type": "Currency", "tier": "S", "reason": "~9.5 Ex; locks a T1 mod", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Lineage Support Gem", "match_type": "Gem", "tier": "S", "reason": "Rarest gems; Anomaly Map (T6+) boss drop, prime trade target", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Ryslatha's Coil", "match_type": "Unique", "tier": "S", "reason": "Rare, roll-dependent high value (Ornate Belt base)", "confidence": "medium", "source_refs": ["Maxroll"] },
+      { "name": "Atziri's Acuity", "match_type": "Unique", "tier": "S", "reason": "Instant-leech gloves (Moulded Mitts base); meta-dependent", "confidence": "medium", "source_refs": ["Maxroll"] },
+      { "name": "Ventor's Gamble", "match_type": "Unique", "tier": "S", "reason": "Top rolls insane; modifier-dependent (Gold Ring base)", "confidence": "medium", "source_refs": ["Maxroll"] }
+    ],
+    "A": [
+      { "name": "Exalted Orb", "match_type": "Currency", "tier": "A", "reason": "Fractional unit/benchmark; high cumulative value", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Orb of Annulment", "match_type": "Currency", "tier": "A", "reason": "~3-5 Ex; undervalued crafting orb", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Chaos Orb", "match_type": "Currency", "tier": "A", "reason": "~1 Ex trading unit", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Greater Essence", "match_type": "Currency", "tier": "A", "reason": "In-demand mods 50+ Ex", "confidence": "medium", "source_refs": ["Boostmatch"] },
+      { "name": "Soul Core", "match_type": "SoulCore", "tier": "A", "reason": "Non-trivial Ex floor; trade currency", "confidence": "medium", "source_refs": ["Boostmatch"] },
+      { "name": "Omen of Light", "match_type": "Other", "tier": "A", "reason": "High-liquidity trade omen", "confidence": "medium", "source_refs": ["Boostmatch"] },
+      { "name": "Thief's Torment", "match_type": "Unique", "tier": "A", "reason": "Popular usable unique (Emerald Ring base)", "confidence": "medium", "source_refs": ["Maxroll"] },
+      { "name": "Everlasting Gaze", "match_type": "Unique", "tier": "A", "reason": "ES/mana meta demand (Azure Amulet base)", "confidence": "medium", "source_refs": ["Maxroll"] }
+    ],
+    "B": [
+      { "name": "Orb of Chance", "match_type": "Currency", "tier": "B", "reason": "~0.5 Ex; useful", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Regal Orb", "match_type": "Currency", "tier": "B", "reason": "alt-regal crafting step", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Vaal Orb", "match_type": "Currency", "tier": "B", "reason": "corruption gamble", "confidence": "medium", "source_refs": ["Boostmatch"] },
+      { "name": "Greater Rune", "match_type": "Rune", "tier": "B", "reason": "socket bonus; Verisium relevance", "confidence": "medium", "source_refs": ["Boostmatch"] },
+      { "name": "Fireflower", "match_type": "Unique", "tier": "B", "reason": "+fire levels corruption target (Solar Amulet base)", "confidence": "low", "source_refs": ["Maxroll"] },
+      { "name": "Eye of Chayula", "match_type": "Unique", "tier": "B", "reason": "niche; fades after fresh economy (Gold Amulet base)", "confidence": "low", "source_refs": ["Maxroll"] }
+    ],
+    "C": [
+      { "name": "Orb of Alchemy", "match_type": "Currency", "tier": "C", "reason": "common map-prep crafting", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Gemcutter's Prism", "match_type": "Currency", "tier": "C", "reason": "quality; bulk-trade", "confidence": "medium", "source_refs": ["Boostmatch"] },
+      { "name": "Rune", "match_type": "Rune", "tier": "C", "reason": "common socket bonus", "confidence": "medium", "source_refs": ["Boostmatch"] },
+      { "name": "Catalyst", "match_type": "Other", "tier": "C", "reason": "jewellery quality; mandatory but cheap", "confidence": "medium", "source_refs": ["Boostmatch"] }
+    ],
+    "D": [
+      { "name": "Orb of Transmutation", "match_type": "Currency", "tier": "D", "reason": "free crafting fuel; ~0 trade value", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Orb of Augmentation", "match_type": "Currency", "tier": "D", "reason": "free crafting fuel", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Orb of Alteration", "match_type": "Currency", "tier": "D", "reason": "free crafting fuel", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Blacksmith's Whetstone", "match_type": "Currency", "tier": "D", "reason": "quality fuel; low value", "confidence": "medium", "source_refs": ["Boostmatch"] }
+    ],
+    "F": [
+      { "name": "Scroll of Wisdom", "match_type": "Currency", "tier": "F", "reason": "trivial value; usually hidden late-game", "confidence": "high", "source_refs": ["Boostmatch"] },
+      { "name": "Lesser Rune", "match_type": "Rune", "tier": "F", "reason": "vendor fodder (3 -> 1 standard)", "confidence": "medium", "source_refs": ["Boostmatch"] }
+    ]
+  },
+  "chance_bases": {
+    "SS_CHANCE_BASE": [
+      { "name": "Stellar Amulet", "match_type": "BaseType", "tier": "SS_CHANCE_BASE", "reason": "-> Astramentis (Tier-0). High opportunity cost; good base on its own.", "confidence": "high", "source_refs": ["Maxroll"] },
+      { "name": "Sapphire Ring", "match_type": "BaseType", "tier": "SS_CHANCE_BASE", "reason": "-> Dream Fragments (Tier-0); consolation Polcirkeln", "confidence": "high", "source_refs": ["Maxroll"] },
+      { "name": "Heavy Belt", "match_type": "BaseType", "tier": "SS_CHANCE_BASE", "reason": "-> Headhunter", "confidence": "high", "source_refs": ["Maxroll"] },
+      { "name": "Emerald Ring", "match_type": "BaseType", "tier": "SS_CHANCE_BASE", "reason": "-> Thief's Torment / Death Rush; best risk-adjusted target", "confidence": "high", "source_refs": ["Maxroll"] },
+      { "name": "Ornate Belt", "match_type": "BaseType", "tier": "SS_CHANCE_BASE", "reason": "-> Ryslatha's Coil", "confidence": "medium", "source_refs": ["Maxroll"] },
+      { "name": "Gold Ring", "match_type": "BaseType", "tier": "SS_CHANCE_BASE", "reason": "-> Ventor's Gamble / Andvarius", "confidence": "medium", "source_refs": ["Maxroll"] },
+      { "name": "Azure Amulet", "match_type": "BaseType", "tier": "SS_CHANCE_BASE", "reason": "-> Everlasting Gaze (meta-dependent)", "confidence": "medium", "source_refs": ["Maxroll"] },
+      { "name": "Solar Amulet", "match_type": "BaseType", "tier": "SS_CHANCE_BASE", "reason": "-> Fireflower; also strong rare-craft base (opportunity cost)", "confidence": "medium", "source_refs": ["Maxroll"] },
+      { "name": "Moulded Mitts", "match_type": "BaseType", "tier": "SS_CHANCE_BASE", "reason": "-> Atziri's Acuity (NOT Hateforge: boss-only)", "confidence": "medium", "source_refs": ["Maxroll"] },
+      { "name": "Gold Amulet", "match_type": "BaseType", "tier": "SS_CHANCE_BASE", "reason": "-> Eye of Chayula; niche, fades post-fresh-economy", "confidence": "low", "source_refs": ["Maxroll"] }
+    ]
+  },
+  "rules": [
+    { "id": "waystone_tier", "applies_to": "WaystoneTier", "logic": "WaystoneTier >= 15 -> A; 11-14 -> B; 6-10 -> C; <6 -> D. Anomaly Maps (T6+) lean A.", "confidence": "medium" },
+    { "id": "currency_class_default", "applies_to": "Class \"Currency\"", "logic": "Unmatched currency defaults to C unless name hits a tier entry; never below C without explicit entry.", "confidence": "medium" },
+    { "id": "boss_only_exclusion", "applies_to": "chance_bases", "logic": "Never list a base whose only unique(s) are boss/encounter drops (e.g. Zerphi's Genesis on Heavy Belt, Hateforge on Moulded Mitts). Chancing cannot produce them.", "confidence": "high" },
+    { "id": "advanced_expert_bases", "applies_to": "BaseType", "logic": "Advanced/Expert variant bases are distinct and currently NOT chanceable; do not promote them to SS_CHANCE_BASE.", "confidence": "high" },
+    { "id": "exact_match_for_promotion", "applies_to": "SS_CHANCE_BASE", "logic": "Promote only on exact base-name match (respect == vs substring operator); never substring-promote a short token.", "confidence": "high" }
+  ]
+}

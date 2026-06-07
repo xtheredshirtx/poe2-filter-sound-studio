@@ -1,0 +1,14 @@
+# Runtime dependencies for POE2 Filter Sound Studio.
+# Generated from actual imports; see requirements-dev.txt for tooling/tests.
+
+# --- Required ---
+customtkinter>=5.2.0     # GUI toolkit (main.py, all ui/* dialogs)
+jsonschema>=4.0.0        # validates the economy-tier data + template files
+
+# --- Optional audio backends ---
+# The app probes these in order and falls back gracefully if any are missing
+# (see main.py audio backend setup). Install the ones you want to use.
+python-vlc>=3.0.0        # preferred backend
+pygame>=2.1.0
+pydub>=0.25.1
+playsound>=1.2.2

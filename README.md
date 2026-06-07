@@ -234,6 +234,39 @@ SetBackgroundColor R G B A
 The alpha value is optional in filter syntax. When absent, the parser treats it
 as `255`.
 
+## Economy Tier Visual Preset
+
+Restyle your whole filter by **economy value tier** in one step. It scans every
+block, classifies the items it matches into a value tier (SS → F, plus the
+special `SS_CHANCE_BASE` for high-value chancing bases), and applies one
+consistent look per tier across every item category.
+
+Use the **Economy Tier** dropdown in the top toolbar, or **Tools → Economy Tier
+Visuals…**. Modes: `Off` (default), `Preview Only`, `Apply Economy Tier Visuals`,
+`Apply Economy Tier Visuals Plus Chance Base Boost`, and `Restore Previous
+Visuals`. Every apply shows a preview diff first and writes a verified backup to
+`backups/` before saving.
+
+Key guarantees:
+
+- **Sounds are never touched.** `PlayAlertSound*`, `CustomAlertSound*`, and
+  `DisableDropSound` stay byte-for-byte identical; a structural-diff guard aborts
+  the save if anything other than the targeted visual directives would change.
+- **Conservative by default.** `Hide` blocks, sound-only rules, and
+  low-confidence guesses are left alone unless you opt in (Minimum confidence /
+  "alter hidden" controls). Re-applying is idempotent.
+- **Chance Base Boost** promotes only `Rarity Normal` blocks whose `BaseType`
+  exactly matches a known chancing base — never Magic/Rare, never a substring.
+- **Restore** reverts the last economy-tier operation (and is itself undoable).
+- **Customizable looks.** Click **🎨 Edit Tier Styles…** to set each tier's
+  colours, font, beam (`PlayEffect`), and minimap marker, and save it as a named
+  preset you can switch between in the Template dropdown.
+
+Economy values drift — the shipped tier data is a relative-value snapshot, not
+prices. See **[docs/economy_tier_visuals.md](docs/economy_tier_visuals.md)** for
+how it classifies, how to update `data/economy_tiers/poe2_0_5_tiers.json` via
+`tools/update_economy_tiers.py`, and how to add visual templates.
+
 ## Sound Health Tools
 
 The status bar has a clickable health indicator. When `verify_on_save` is
@@ -437,10 +470,36 @@ POE2 Item Filter Sound Replacer/
   ui/
     dialogs.py                    Color picker, item preview, confirmation UI
     compatibility_dialog.py       Migration-rule UI
+    visual_tools_dialog.py        Emphasize-by-tier / randomizer UI
+    economy_tier_ui.py            Economy Tier Visual Preset dialog
+    economy_tier_editor.py        Per-tier style editor (named presets)
+
+  economy_tier/                   Economy Tier Visual Preset (pure core + I/O)
+    filter_parser.py              Round-trip-fidelity parser (operator-aware)
+    economy_tier_data.py          Tier data loader (schema-validated, versioned)
+    economy_tier_classifier.py    Pure tier classification + run fingerprint
+    visual_template_loader.py     Templates + game-valid token validation
+    directive_value_validator.py  PlayEffect/MinimapIcon/RGBA enum checks
+    filter_visual_patcher.py      Line-surgical patch + idempotency sentinel
+    filter_validator.py           Post-edit checks + structural diff guard
+    backup_manager.py             Verified backup, atomic write, external-edit
+    op_history.py                 Disk-persisted history for Restore
+    controller.py                 Orchestration the UI calls
+    schemas/*.schema.json         JSON Schemas for the data/template/history files
 
   data/
     color_templates/templates.json
+    color_templates/economy_tier_templates.json   Economy tier visual templates
+    economy_tiers/poe2_0_5_tiers.json             Economy tier seed data
     migration_rules.json
+
+  tools/
+    update_economy_tiers.py       Maintainer-only offline data updater
+
+  tests/                          pytest suite (parser/classifier/.../golden)
+  requirements.txt                Runtime deps (generated from imports)
+  requirements-dev.txt            Test/lint/type/packaging deps
+  pyproject.toml                  ruff / black / mypy / pytest config (new code)
 
   ffmpeg/bin/ffmpeg.exe           Optional, auto-bundled into the EXE if present
   dist/builds/App_v<N>.exe        Build output

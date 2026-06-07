@@ -11,6 +11,13 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 
+# Test / lint / type tooling caches and coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
 # App-generated data (sits beside loaded filters, not under this folder, but ignore in case)
 *_backups/
 old sound files/

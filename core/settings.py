@@ -74,6 +74,18 @@ class AppSettings:
     sidebar_width: int = 320
     show_sidebar: bool = True
 
+    # Economy Tier Visual Preset (additive feature). The dropdown itself always
+    # defaults to "Off"; these persist the user's last dialog choices so they
+    # don't have to re-tick the transfer options every session.
+    economy_tier_min_confidence: str = "medium"   # "low" | "medium" | "high"
+    economy_tier_default_template: str = ""        # "" -> file's first template
+    economy_tier_apply_text: bool = True
+    economy_tier_apply_bg: bool = True
+    economy_tier_apply_border: bool = True
+    economy_tier_apply_font: bool = True
+    economy_tier_apply_effect: bool = True
+    economy_tier_apply_minimap: bool = True
+
     # ------------ Helpers ------------
 
     def add_recent(self, path: str, limit: int = 10) -> None:

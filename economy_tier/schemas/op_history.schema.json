@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Economy Tier Operation History",
+  "type": "object",
+  "required": ["schema_version", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "integer", "minimum": 1 },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "timestamp",
+          "operation",
+          "file_path",
+          "original_content",
+          "new_content"
+        ],
+        "additionalProperties": true,
+        "properties": {
+          "timestamp": { "type": "string" },
+          "operation": { "type": "string" },
+          "template": { "type": "string" },
+          "changed_block_count": { "type": "integer", "minimum": 0 },
+          "fingerprint": { "type": "string" },
+          "file_path": { "type": "string" },
+          "original_content": { "type": "string" },
+          "new_content": { "type": "string" }
+        }
+      }
+    }
+  }
+}

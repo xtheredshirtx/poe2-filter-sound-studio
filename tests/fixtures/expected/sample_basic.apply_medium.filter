@@ -1,0 +1,55 @@
+# NeverSink-style sample filter (test fixture)
+# [[1000]] Currency
+
+Show # $type->currency $tier->t1
+	# [ETVP tier=SS template="High Contrast Economy Tiers" v=1]
+	Class "Currency"
+	BaseType == "Divine Orb" "Mirror of Kalandra"
+	SetFontSize 45
+	SetTextColor 255 255 255 255
+	PlayAlertSound 1 300
+	MinimapIcon 0 Red Star
+	SetBorderColor 255 215 0 255
+	SetBackgroundColor 180 20 20 230
+	PlayEffect Red Temp
+
+Show
+	# [ETVP tier=D template="High Contrast Economy Tiers" v=1]
+	Class "Currency"
+	BaseType "Orb of Transmutation"
+	SetFontSize 32
+	SetTextColor 160 160 160 220
+	SetBorderColor 70 70 70 150
+	SetBackgroundColor 20 20 20 120
+
+# [[2000]] Chance Bases
+
+Show
+	Class "Rings" "Amulets"
+	Rarity Normal
+	BaseType "Sapphire Ring" "Stellar Amulet"
+	SetTextColor 200 200 200 255
+
+Show
+	Class "Rings"
+	Rarity Magic
+	BaseType "Sapphire Ring"
+
+# [[3000]] Waystones
+
+Show
+	# [ETVP tier=A template="High Contrast Economy Tiers" v=1]
+	Class "Waystones"
+	WaystoneTier >= 15
+	SetFontSize 41
+	SetTextColor 255 255 255 255
+	SetBorderColor 150 220 255 255
+	SetBackgroundColor 30 120 255 210
+	PlayEffect Blue Temp
+	MinimapIcon 1 Blue Circle
+
+# [[4000]] Hide junk
+
+Hide
+	Class "Currency"
+	BaseType "Scroll of Wisdom"
