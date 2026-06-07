@@ -1,0 +1,15 @@
+# Normalize line endings so git stops warning and the repo stays consistent
+# across machines. Text files are stored and checked out with LF.
+* text=auto eol=lf
+
+# Treat binary assets as binary (never line-ending converted).
+*.ico  binary
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.wav  binary
+*.mp3  binary
+*.ogg  binary
+*.exe  binary
+*.dll  binary
