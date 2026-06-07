@@ -276,6 +276,10 @@ def classify(
     sections = _section_map(doc)
     results: list[Classification] = []
     warnings: list[str] = []
+    # Count (don't itemize) the common, expected case where a block lists a
+    # chance base but isn't Rarity Normal, so we summarize it as one line
+    # instead of flooding the preview with one warning per block.
+    chance_not_normal = 0
 
     for block in doc.blocks:
         start_line = block.start + 1
@@ -322,10 +326,7 @@ def classify(
                     match_type = f"chance base {mt}"
                     is_promotion = True
                 else:
-                    warnings.append(
-                        f"block {block.index} matches chance base "
-                        f"{entry.name!r} but is not Rarity Normal -- not promoted"
-                    )
+                    chance_not_normal += 1
 
         # (2-4) Named tier entry by exact name.
         if tier is None:
@@ -382,6 +383,12 @@ def classify(
         base.match_type = match_type
         base.is_chance_promotion = is_promotion
         results.append(base)
+
+    if chance_not_normal:
+        warnings.append(
+            f"{chance_not_normal} block(s) list a chance base but aren't Rarity "
+            "Normal, so they were not promoted (expected — chancing needs Normal items)."
+        )
 
     fingerprint = compute_fingerprint(
         doc.serialize(), data.fingerprint, template_fingerprint, options

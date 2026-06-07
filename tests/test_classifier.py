@@ -45,7 +45,17 @@ def test_chance_not_promoted_for_magic():
     text = 'Show\n\tRarity Magic\n\tBaseType "Sapphire Ring"\n'
     res = _classify(text, enable_chance_boost=True, min_confidence=Confidence.low)
     assert res.classifications[0].tier != "SS_CHANCE_BASE"
-    assert any("not Rarity Normal" in w for w in res.warnings)
+    # The skip is reported as ONE aggregated note, not one warning per block.
+    assert len(res.warnings) == 1
+    assert "Rarity Normal" in res.warnings[0]
+
+
+def test_chance_not_normal_warning_is_aggregated():
+    # Many non-Normal blocks listing chance bases -> still a single warning line.
+    text = "".join('Show\n\tRarity Magic\n\tBaseType "Sapphire Ring"\n' for _ in range(20))
+    res = _classify(text, enable_chance_boost=True, min_confidence=Confidence.low)
+    assert len(res.warnings) == 1
+    assert "20 block(s)" in res.warnings[0]
 
 
 def test_substring_does_not_promote():
