@@ -129,16 +129,20 @@ class _EconomyTierDialog:
 
         ctk.CTkLabel(row, text="Template:").grid(row=0, column=2, padx=(16, 4), pady=8, sticky="w")
         self.template_var = tk.StringVar(value=self.controller.template_name or "")
-        ctk.CTkOptionMenu(
+        self._template_menu = ctk.CTkOptionMenu(
             row,
             values=self.controller.template_names() or [""],
             variable=self.template_var,
             command=self._on_template,
             width=240,
-        ).grid(row=0, column=3, padx=4, pady=8, sticky="w")
+        )
+        self._template_menu.grid(row=0, column=3, padx=4, pady=8, sticky="w")
+        ctk.CTkButton(row, text="🎨 Edit Tier Styles…", command=self._open_editor, width=150).grid(
+            row=0, column=4, padx=(8, 4), pady=8, sticky="w"
+        )
 
         ctk.CTkLabel(row, text="Min confidence:").grid(
-            row=0, column=4, padx=(16, 4), pady=8, sticky="w"
+            row=0, column=5, padx=(16, 4), pady=8, sticky="w"
         )
         self.conf_var = tk.StringVar(value=self._pref("economy_tier_min_confidence", "medium"))
         ctk.CTkOptionMenu(
@@ -147,7 +151,7 @@ class _EconomyTierDialog:
             variable=self.conf_var,
             command=lambda _v: self._refresh_preview(),
             width=120,
-        ).grid(row=0, column=5, padx=4, pady=8, sticky="w")
+        ).grid(row=0, column=6, padx=4, pady=8, sticky="w")
 
         # Transfer checkboxes.
         toggles = ctk.CTkFrame(parent, fg_color=pal.panel_alt)
@@ -224,6 +228,21 @@ class _EconomyTierDialog:
 
     def _on_template(self, value):
         self.controller.template_name = value
+        self._refresh_preview()
+
+    def _open_editor(self):
+        """Open the per-tier style editor seeded from the current template."""
+        from ui.economy_tier_editor import open_tier_style_editor
+
+        open_tier_style_editor(self.app, self.controller, on_saved=self._on_template_saved)
+
+    def _on_template_saved(self, name: str):
+        """Refresh the Template dropdown after a preset is saved/deleted."""
+        names = self.controller.template_names() or [""]
+        self._template_menu.configure(values=names)
+        chosen = name if name in names else self.controller.template_name
+        self.template_var.set(chosen)
+        self.controller.template_name = chosen
         self._refresh_preview()
 
     # ---------------- preview area ----------------

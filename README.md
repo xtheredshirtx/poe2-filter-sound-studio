@@ -258,6 +258,9 @@ Key guarantees:
 - **Chance Base Boost** promotes only `Rarity Normal` blocks whose `BaseType`
   exactly matches a known chancing base — never Magic/Rare, never a substring.
 - **Restore** reverts the last economy-tier operation (and is itself undoable).
+- **Customizable looks.** Click **🎨 Edit Tier Styles…** to set each tier's
+  colours, font, beam (`PlayEffect`), and minimap marker, and save it as a named
+  preset you can switch between in the Template dropdown.
 
 Economy values drift — the shipped tier data is a relative-value snapshot, not
 prices. See **[docs/economy_tier_visuals.md](docs/economy_tier_visuals.md)** for
@@ -469,6 +472,7 @@ POE2 Item Filter Sound Replacer/
     compatibility_dialog.py       Migration-rule UI
     visual_tools_dialog.py        Emphasize-by-tier / randomizer UI
     economy_tier_ui.py            Economy Tier Visual Preset dialog
+    economy_tier_editor.py        Per-tier style editor (named presets)
 
   economy_tier/                   Economy Tier Visual Preset (pure core + I/O)
     filter_parser.py              Round-trip-fidelity parser (operator-aware)

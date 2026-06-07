@@ -104,3 +104,26 @@ def test_graceful_disable_on_bad_data(temp_filter, isolated_history, monkeypatch
     # Apply refuses cleanly rather than crashing.
     res = ctrl.apply(Mode.APPLY, TransferOptions(), "low")
     assert res.ok is False
+
+
+def test_reload_templates_picks_up_user_preset(
+    temp_filter, isolated_history, tmp_path, monkeypatch
+):
+    up = str(tmp_path / "user.json")
+    monkeypatch.setattr("economy_tier.visual_template_loader.user_templates_path", lambda: up)
+    from economy_tier.visual_template_loader import Template, load_templates, save_user_template
+
+    base = load_templates().get()
+
+    path = temp_filter(TEXT)
+    ctrl = _ctrl(path)
+    assert "Mine" not in ctrl.template_names()  # no user file yet at construction
+    # Save a preset, then reload -> it becomes available.
+    save_user_template(Template(name="Mine", description="", tiers=base.tiers))
+    ctrl.reload_templates(select="Mine")
+    assert "Mine" in ctrl.template_names()
+    assert ctrl.template_name == "Mine"
+    assert ctrl.templates.is_user("Mine") is True
+    # Applying with the user preset works end to end.
+    res = ctrl.apply(Mode.APPLY, TransferOptions(), "low")
+    assert res.ok is True

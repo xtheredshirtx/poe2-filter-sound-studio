@@ -39,7 +39,11 @@ from economy_tier.filter_visual_patcher import (
 )
 from economy_tier.logging_setup import get_logger
 from economy_tier.op_history import OpHistory, new_entry
-from economy_tier.visual_template_loader import Template, TemplateSet, load_templates
+from economy_tier.visual_template_loader import (
+    Template,
+    TemplateSet,
+    load_all_templates,
+)
 
 _log = get_logger()
 
@@ -127,7 +131,7 @@ class EconomyTierController:
     def _load_resources(self) -> None:
         try:
             self._data = load_tier_data()
-            self._templates = load_templates()
+            self._templates = load_all_templates()
             if self.template_name is None:
                 self.template_name = self._templates.default_name
             self.available = True
@@ -135,6 +139,19 @@ class EconomyTierController:
             self.available = False
             self.disabled_reason = str(exc)
             _log.error("Economy Tier feature disabled: %s", exc)
+
+    def reload_templates(self, select: str | None = None) -> None:
+        """Re-read shipped + user templates (after the editor saves one).
+
+        Keeps the current selection if it still exists, otherwise (or when
+        ``select`` is given and present) switches to ``select`` / the default.
+        """
+        self._templates = load_all_templates()
+        names = self._templates.names()
+        if select and select in names:
+            self.template_name = select
+        elif self.template_name not in names:
+            self.template_name = self._templates.default_name
 
     @property
     def data(self) -> TierData:

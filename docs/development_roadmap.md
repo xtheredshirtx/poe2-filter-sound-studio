@@ -21,7 +21,9 @@ Tier Visual Preset feature are marked **done**; the rest are future work.
 - Disk-persisted operation history; `Restore Previous Visuals` (itself undoable).
 - Schema-validated, versioned, staleness-warned, confidence-gated data/template
   loading with graceful feature-disable on bad data.
-- Color/visual **templates UI** (Template dropdown + per-kind transfer toggles).
+- Color/visual **templates UI**: Template dropdown + per-kind transfer toggles,
+  plus an in-app **per-tier style editor** (🎨 Edit Tier Styles…) that saves named
+  presets (colours, font, PlayEffect beam, MinimapIcon) to the user's config dir.
 - Offline runtime + separate maintainer updater (`tools/update_economy_tiers.py`).
 - **Generated `requirements.txt`** (+ `requirements-dev.txt`) from actual imports;
   PyInstaller spec/script bundle the new data + schemas.
@@ -39,8 +41,9 @@ Tier Visual Preset feature are marked **done**; the rest are future work.
   the scorer missed.
 - **Optional color / effect / minimap transfer in Smart Merge** (currently it
   transfers sounds only; the executor has a placeholder for colours).
-- **Richer color-template editor UI**: visual editing of templates (both the
-  economy-tier templates and the manual colour templates) instead of editing JSON.
+- **Richer color-template editor UI**: the economy-tier per-tier editor exists;
+  extend visual editing to the *manual* colour templates too, and add
+  drag-to-reorder / import-export of economy-tier presets.
 - **Block-splitting** so a mixed block can be split by tier instead of taking the
   highest tier present (only behind an explicit, safe opt-in).
 - **Per-category template overrides** if users want, say, currency to deviate from

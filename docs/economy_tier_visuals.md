@@ -100,16 +100,34 @@ Confirm chase items against the official Trade 2 site's listing volume and at
 least one other source before promoting a tier. **Boss-only uniques cannot be
 chanced** and must never appear in `chance_bases`.
 
-## Adding / editing visual templates
+## Choosing how each tier looks (in-app editor)
 
-Templates live in `data/color_templates/economy_tier_templates.json`
-(schema-validated; every colour/effect/minimap token is checked against PoE's
-allowed enums at load — a bad token disables the feature with a clear message
-rather than producing a filter the client rejects). Add another object to
-`templates[]` with a unique `name` and a `tiers` map; it appears in the dialog's
-Template dropdown. Never add a sound directive — the schema forbids it.
+Click **🎨 Edit Tier Styles…** in the Economy Tier dialog to open a visual editor
+with one row per tier (SS_CHANCE_BASE, SS, S, A, B, C, D, F). For each tier you
+set:
 
-> This file is intentionally separate from the older
+- **Text / Background / Border** colours (click a swatch → colour picker),
+- **Font** size,
+- **Beam** — the `PlayEffect` ground light (a colour, or `None`) + a **Temp**
+  toggle (Temp = only shows briefly on drop),
+- **Minimap** — the `MinimapIcon` marker: size (`None`/0/1/2), colour, and shape,
+
+with a live preview per row. Give it a **Preset name** and **Save Preset**. Your
+preset is saved as a *named template* in your per-user config dir (alongside the
+app's settings), appears in the **Template** dropdown, and can be edited or
+deleted later. The shipped **High Contrast Economy Tiers** default can't be
+overwritten — saving from it creates a copy.
+
+### Editing the JSON directly (advanced)
+
+The shipped template lives in `data/color_templates/economy_tier_templates.json`
+and your presets in `<user-config>/economy_tier/economy_tier_templates.json`. Both
+are schema-validated and every colour/effect/minimap token is checked against
+PoE's allowed enums on load — a bad token is rejected with a clear message rather
+than producing a filter the client silently refuses. Never add a sound directive;
+the schema forbids it.
+
+> These files are intentionally separate from the older
 > `data/color_templates/templates.json` used by the manual colour editor, which
 > has a different schema.
 

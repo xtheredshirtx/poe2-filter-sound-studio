@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import json
+import os
 
 import pytest
 
 from economy_tier.errors import TemplateError
 from economy_tier.resources import templates_path
-from economy_tier.visual_template_loader import load_templates
+from economy_tier.visual_template_loader import (
+    Template,
+    TierStyle,
+    delete_user_template,
+    load_all_templates,
+    load_templates,
+    save_user_template,
+    template_to_dict,
+)
 
 
 def test_load_shipped_templates():
@@ -66,3 +75,72 @@ def test_rgba_three_gets_alpha(tmp_path):
     p.write_text(json.dumps(raw), encoding="utf-8")
     ts = load_templates(str(p))
     assert ts.get().style_for("SS").text_color == (10, 20, 30, 255)
+
+
+# --- user preset management (named presets) ---------------------------------
+
+
+def _custom(name: str) -> Template:
+    return Template(
+        name=name,
+        description="custom",
+        tiers={
+            "SS": TierStyle(
+                text_color=(255, 255, 255, 255),
+                bg_color=(10, 10, 10, 255),
+                border_color=(255, 0, 0, 255),
+                font_size=45,
+                play_effect=("Red", True),
+                minimap=(0, "Red", "Star"),
+            ),
+            "F": TierStyle(text_color=(80, 80, 80, 255), font_size=30),
+        },
+    )
+
+
+def test_template_to_dict_round_trips():
+    d = template_to_dict(_custom("X"))
+    assert d["name"] == "X"
+    assert d["tiers"]["SS"]["play_effect"] == ["Red", True]
+    assert d["tiers"]["SS"]["minimap"] == [0, "Red", "Star"]
+    assert "play_effect" not in d["tiers"]["F"]  # None fields omitted
+
+
+def test_save_and_load_all_merges(tmp_path):
+    up = str(tmp_path / "user.json")
+    save_user_template(_custom("My Loud"), user_path=up)
+    merged = load_all_templates(user_path=up)
+    assert "My Loud" in merged.names()
+    assert "High Contrast Economy Tiers" in merged.names()  # shipped still present
+    assert merged.is_user("My Loud") is True
+    assert merged.is_user("High Contrast Economy Tiers") is False
+
+
+def test_save_overwrites_by_name(tmp_path):
+    up = str(tmp_path / "user.json")
+    save_user_template(_custom("Dup"), user_path=up)
+    save_user_template(_custom("Dup"), user_path=up)
+    assert load_all_templates(user_path=up).names().count("Dup") == 1
+
+
+def test_delete_user_template(tmp_path):
+    up = str(tmp_path / "user.json")
+    save_user_template(_custom("Temp"), user_path=up)
+    assert delete_user_template("Temp", user_path=up) is True
+    assert "Temp" not in load_all_templates(user_path=up).names()
+    assert delete_user_template("Temp", user_path=up) is False  # already gone
+
+
+def test_save_rejects_invalid_token(tmp_path):
+    up = str(tmp_path / "user.json")
+    bad = Template(name="Bad", description="", tiers={"SS": TierStyle(font_size=999)})
+    with pytest.raises(TemplateError):
+        save_user_template(bad, user_path=up)
+    assert not os.path.exists(up)  # nothing written
+
+
+def test_load_all_ignores_corrupt_user_file(tmp_path):
+    up = tmp_path / "user.json"
+    up.write_text("{not json", encoding="utf-8")
+    merged = load_all_templates(user_path=str(up))
+    assert "High Contrast Economy Tiers" in merged.names()  # shipped survives
