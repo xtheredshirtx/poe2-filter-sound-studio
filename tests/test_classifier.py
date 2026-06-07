@@ -115,19 +115,31 @@ def test_no_grading_signal_stays_unknown():
     assert res.classifications[0].status == Status.UNKNOWN
 
 
-def test_filter_grading_applied_by_default():
-    # A block the filter grades with a $tier tag (e.g. a rare gear block) is
-    # tiered at MEDIUM, so it applies at the default confidence.
+def test_uncut_gem_scales_by_level():
+    # Higher gem level -> higher tier, monotonically (no inversion).
+    def tier_for(gemlevel_line):
+        text = f'Show\n\t{gemlevel_line}\n\tBaseType "Uncut Skill Gem"\n'
+        return _classify(text, min_confidence=Confidence.medium).classifications[0].tier
+
+    assert tier_for("GemLevel >= 20") == "A"
+    assert tier_for("GemLevel 19") == "B"
+    assert tier_for("GemLevel 18") == "C"
+    assert tier_for("GemLevel 16") == "D"
+    assert tier_for("GemLevel 14") == "F"
+    # No GemLevel -> treated as the low catch-all, not a high tier.
+    no_level = _classify('Show\n\tBaseType "Uncut Spirit Gem"\n', min_confidence=Confidence.medium)
+    assert no_level.classifications[0].tier == "F"
+
+
+def test_tier_tag_number_not_used_as_rank():
+    # A $tier->skill20 tag must NOT be read as "tier 20 -> junk". With no
+    # recognised section and not a gem base, the block is simply unknown.
     res = _classify(
-        'Show # $type->endgameWeapon $tier->t3\n\tRarity Rare\n\tClass "Two Hand Swords"\n',
+        'Show # $type->foo $tier->skill20\n\tBaseType "Random Thing"\n',
         use_heuristic_fallback=True,
-        min_confidence=Confidence.medium,
+        min_confidence=Confidence.low,
     )
-    c = res.classifications[0]
-    assert c.status == Status.CLASSIFIED
-    assert c.tier == "B"  # t3 -> MID -> B
-    assert c.confidence == Confidence.medium
-    assert c.applicable(Confidence.medium) is True
+    assert res.classifications[0].status == Status.UNKNOWN
 
 
 def test_section_grading_applied_by_default():

@@ -39,13 +39,8 @@ from economy_tier.filter_parser import (
     FilterDocument,
 )
 
-# Reuse the existing heuristic tier classifier (section/$tier) as the fallback.
-from features.visual_emphasis import (
-    _SECTION_KEYWORDS,
-    _TIER_TAG_RE,
-    ValueTier,
-)
-from features.visual_emphasis import classify_block as _heuristic_classify
+# Reuse the existing section keyword map for grading by section name.
+from features.visual_emphasis import _SECTION_KEYWORDS, ValueTier
 
 _SECTION_RE = re.compile(r"^#\s*\[\[(\d+)\]\]\s*(.+?)\s*$")
 
@@ -223,26 +218,49 @@ def _waystone_tier(block: Block) -> tuple[str, str] | None:
 
 
 def _grading_tier(header: str, section: str) -> tuple[str, Confidence] | None:
-    """Use the filter's OWN grade for this block, if it has one.
+    """Use the filter's OWN grade for this block, from its SECTION name.
 
-    A real grading signal is either an explicit ``$tier->`` tag in the block
-    header (the author's per-item grade) or a recognised section name. When one
-    is present we trust it at MEDIUM confidence, so rare/magic/normal gear that
-    the filter already grades gets tiered by default — exactly like uniques.
+    The block's section (e.g. "Endgame - Rare - Gear", "Waystones") is a reliable
+    grade, so we trust it at MEDIUM confidence — that's how rare/magic/normal gear
+    the filter groups gets tiered by default, like uniques.
 
-    Crucially we return ``None`` when there is *no* signal, so blocks the filter
-    doesn't grade are left unchanged rather than swept into a default tier.
+    We deliberately DON'T use the ``$tier->`` tag's trailing number as an
+    importance rank: in NeverSink PoE2 filters that number is category-specific
+    (e.g. ``$tier->skill20`` is a gem *level*, not "tier 20"), so reading it as a
+    rank mis-tiers things badly. Blocks with no recognised section return None and
+    are left unchanged.
     """
-    has_tag = bool(_TIER_TAG_RE.search(header or ""))
     sec = (section or "").lower()
-    has_section = any(needle in sec for needle, _vt in _SECTION_KEYWORDS)
-    if not (has_tag or has_section):
+    for needle, vt in _SECTION_KEYWORDS:
+        if needle in sec:
+            tier = _HEURISTIC_TO_TIER.get(vt)
+            if tier is not None:
+                return tier, Confidence.medium
+    return None
+
+
+def _uncut_gem_tier(block: Block) -> tuple[str, str] | None:
+    """Tier Uncut Skill/Spirit/Support Gems by their gem level (higher = better).
+
+    Their value rises with level, so the styling should too. Returns
+    ``(tier, reason)`` or None if this block isn't an uncut-gem block.
+    """
+    bases = [v.lower() for v, _ in block.basetype_values()]
+    if not any("uncut" in b and "gem" in b for b in bases):
         return None
-    vt = _heuristic_classify(header, section)
-    tier = _HEURISTIC_TO_TIER.get(vt)
-    if tier is None:
-        return None
-    return tier, Confidence.medium
+    d = block.first("GemLevel")
+    lvl = d.numeric_value() if d is not None else None
+    if lvl is None:
+        return "F", "uncut gem (unleveled / low)"
+    if lvl >= 20:
+        return "A", f"uncut gem level {lvl}"
+    if lvl == 19:
+        return "B", f"uncut gem level {lvl}"
+    if lvl >= 17:
+        return "C", f"uncut gem level {lvl}"
+    if lvl >= 15:
+        return "D", f"uncut gem level {lvl}"
+    return "F", f"uncut gem level {lvl}"
 
 
 def _section_map(doc: FilterDocument) -> dict[int, str]:
@@ -354,6 +372,13 @@ def classify(
         if tier is None and any("currency" in v.lower() for v, _ in block.class_values()):
             tier, confidence = "C", Confidence.medium
             reason, match_type = "unmatched currency (default C)", "rule:currency"
+
+        # (7b) Uncut gems: tier by gem level (higher = more valuable).
+        if tier is None:
+            ug = _uncut_gem_tier(block)
+            if ug is not None:
+                tier, reason = ug
+                confidence, match_type = Confidence.medium, "rule:uncut_gem"
 
         # (8) Gem class default -> C.
         if tier is None and any("gem" in v.lower() for v, _ in block.class_values()):
