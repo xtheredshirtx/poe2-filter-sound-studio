@@ -310,6 +310,10 @@ class _EconomyTierDialog:
         warn = list(pv.warnings)
         if pv.validation is None:
             warn.append("structural validation did not pass — Apply is blocked")
+        # Defensive cap: never let the warning area flood the dialog.
+        if len(warn) > 5:
+            extra = len(warn) - 5
+            warn = warn[:5] + [f"(+{extra} more)"]
         self.warn_label.configure(text=("⚠ " + " | ".join(warn)) if warn else "")
 
         for i in self.tree.get_children():
