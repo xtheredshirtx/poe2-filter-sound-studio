@@ -94,17 +94,39 @@ def test_unknown_unchanged_by_default():
     assert res.classifications[0].status == Status.UNKNOWN
 
 
-def test_confidence_gating():
-    # Heuristic fallback is low-confidence; not applicable at medium.
+def test_no_grading_signal_stays_unknown():
+    # No $tier tag and no recognised section -> the filter doesn't grade it, so
+    # we leave it unchanged rather than inventing a tier.
     res = _classify(
-        'Show\n\tBaseType "Mystery Plate"\n',
+        'Show\n\tRarity Rare\n\tBaseType "Mystery Plate"\n',
+        use_heuristic_fallback=True,
+        min_confidence=Confidence.low,
+    )
+    assert res.classifications[0].status == Status.UNKNOWN
+
+
+def test_filter_grading_applied_by_default():
+    # A block the filter grades with a $tier tag (e.g. a rare gear block) is
+    # tiered at MEDIUM, so it applies at the default confidence.
+    res = _classify(
+        'Show # $type->endgameWeapon $tier->t3\n\tRarity Rare\n\tClass "Two Hand Swords"\n',
         use_heuristic_fallback=True,
         min_confidence=Confidence.medium,
     )
     c = res.classifications[0]
     assert c.status == Status.CLASSIFIED
-    assert c.applicable(Confidence.medium) is False
-    assert c.applicable(Confidence.low) is True
+    assert c.tier == "B"  # t3 -> MID -> B
+    assert c.confidence == Confidence.medium
+    assert c.applicable(Confidence.medium) is True
+
+
+def test_section_grading_applied_by_default():
+    # Grading can also come from a recognised section name.
+    text = "# [[5000]] Waystones\n" 'Show\n\tClass "Foo"\n\tBaseType "Bar"\n'
+    res = _classify(text, use_heuristic_fallback=True, min_confidence=Confidence.medium)
+    c = res.classifications[0]
+    assert c.status == Status.CLASSIFIED
+    assert c.applicable(Confidence.medium) is True
 
 
 def test_fingerprint_determinism_and_sensitivity():

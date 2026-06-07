@@ -25,28 +25,15 @@ Show
 # [[2000]] Chance Bases
 
 Show
-	# [ETVP tier=B template="High Contrast Economy Tiers" v=1]
 	Class "Rings" "Amulets"
 	Rarity Normal
 	BaseType "Sapphire Ring" "Stellar Amulet"
-	SetTextColor 255 255 255 255
-	SetBorderColor 120 255 120 220
-	SetBackgroundColor 40 120 60 190
-	SetFontSize 38
-	PlayEffect Green Temp
-	MinimapIcon 2 Green Circle
+	SetTextColor 200 200 200 255
 
 Show
-	# [ETVP tier=B template="High Contrast Economy Tiers" v=1]
 	Class "Rings"
 	Rarity Magic
 	BaseType "Sapphire Ring"
-	SetTextColor 255 255 255 255
-	SetBorderColor 120 255 120 220
-	SetBackgroundColor 40 120 60 190
-	SetFontSize 38
-	PlayEffect Green Temp
-	MinimapIcon 2 Green Circle
 
 # [[3000]] Waystones
 

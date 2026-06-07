@@ -55,9 +55,16 @@ doesn't restyle are preserved byte-for-byte. By default it will not restyle
 
 Each classification has a confidence (`low` / `medium` / `high`). The
 **Minimum confidence to apply** selector (default `medium`) controls what gets
-written: lower-confidence guesses (mostly the section/`$tier` heuristic fallback)
-are shown in the preview but not written unless you lower the threshold to `low`.
-Data-driven exact matches are `high`/`medium`; the heuristic fallback is `low`.
+written:
+
+- `high` — only confident economy-data matches (named currency/uniques/rules).
+- `medium` (default) — the above **plus the filter's own grading** (`$tier` tags
+  and recognised sections), so rare/magic/normal gear your filter grades is
+  tiered too.
+- `low` — also includes the weakest guesses (e.g. generic gems).
+
+Everything is always shown in the Preview regardless of the threshold; the
+threshold only controls what gets written.
 
 ## How tiers are decided (priority order)
 
@@ -67,10 +74,21 @@ Data-driven exact matches are `high`/`medium`; the heuristic fallback is `low`.
 4. `WaystoneTier` numeric rule (≥15 → A, 11–14 → B, 6–10 → C, <6 → D)
 5. Unmatched `Class "Currency"` → C (never lower without an explicit entry)
 6. Gem class → C
-7. Section/`$tier` heuristic fallback (low confidence)
-8. Otherwise *unknown* → left unchanged
+7. **The filter's own grading** — a block's explicit `$tier->` tag or recognised
+   section name (medium confidence, applied by default). This is how rare/magic/
+   normal **weapons and armour** get tiered: they have no fixed market value, so
+   the app trusts the grade your filter already assigns them.
+8. Otherwise *unknown* → left unchanged (no grade to use)
 
 When a block matches several items, the **highest** tier wins.
+
+### Why some gear isn't tiered
+
+Rare and magic weapons/armour are worth money based on their *random stats*, not
+their base — so they aren't in the value lists. The app tiers them only when your
+filter already grades them (step 7). If a block has no `$tier->` tag and isn't in
+a recognised section, it's left unchanged rather than guessing. Uniques, by
+contrast, get tier A automatically (step 3).
 
 ## Idempotency
 

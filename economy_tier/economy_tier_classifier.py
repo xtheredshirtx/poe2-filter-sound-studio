@@ -40,7 +40,11 @@ from economy_tier.filter_parser import (
 )
 
 # Reuse the existing heuristic tier classifier (section/$tier) as the fallback.
-from features.visual_emphasis import ValueTier
+from features.visual_emphasis import (
+    _SECTION_KEYWORDS,
+    _TIER_TAG_RE,
+    ValueTier,
+)
 from features.visual_emphasis import classify_block as _heuristic_classify
 
 _SECTION_RE = re.compile(r"^#\s*\[\[(\d+)\]\]\s*(.+?)\s*$")
@@ -218,6 +222,29 @@ def _waystone_tier(block: Block) -> tuple[str, str] | None:
     return "D", f"WaystoneTier {d.operator} {n} (<6)"
 
 
+def _grading_tier(header: str, section: str) -> tuple[str, Confidence] | None:
+    """Use the filter's OWN grade for this block, if it has one.
+
+    A real grading signal is either an explicit ``$tier->`` tag in the block
+    header (the author's per-item grade) or a recognised section name. When one
+    is present we trust it at MEDIUM confidence, so rare/magic/normal gear that
+    the filter already grades gets tiered by default — exactly like uniques.
+
+    Crucially we return ``None`` when there is *no* signal, so blocks the filter
+    doesn't grade are left unchanged rather than swept into a default tier.
+    """
+    has_tag = bool(_TIER_TAG_RE.search(header or ""))
+    sec = (section or "").lower()
+    has_section = any(needle in sec for needle, _vt in _SECTION_KEYWORDS)
+    if not (has_tag or has_section):
+        return None
+    vt = _heuristic_classify(header, section)
+    tier = _HEURISTIC_TO_TIER.get(vt)
+    if tier is None:
+        return None
+    return tier, Confidence.medium
+
+
 def _section_map(doc: FilterDocument) -> dict[int, str]:
     """Map each block index to the nearest preceding ``# [[NNNN]] Title`` name."""
     out: dict[int, str] = {}
@@ -332,16 +359,16 @@ def classify(
             tier, confidence = "C", Confidence.low
             reason, match_type = "gem class (default C)", "rule:gem"
 
-        # (9) Heuristic fallback (section / $tier tag), low confidence.
+        # (9) The filter's OWN grading ($tier tag or known section). Applied at
+        #     MEDIUM confidence so graded rare/magic/normal gear is tiered by
+        #     default; blocks with no grade are left untouched (returns None).
         if tier is None and options.use_heuristic_fallback:
             section = sections.get(block.index, "")
-            htier = _heuristic_classify(block.header_line.content, section)
-            mapped = _HEURISTIC_TO_TIER.get(htier)
-            if mapped is not None:
-                tier = mapped
-                confidence = Confidence.low
-                reason = f"heuristic ({htier.name}, section={section!r})"
-                match_type = "heuristic"
+            graded = _grading_tier(block.header_line.content, section)
+            if graded is not None:
+                tier, confidence = graded
+                reason = f"filter grading (section={section!r})"
+                match_type = "grading"
 
         if tier is None:
             base.status = Status.UNKNOWN
