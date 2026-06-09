@@ -19,6 +19,11 @@ from datetime import datetime
 
 # Import new core modules
 from core.file_operations import load_filter_file, save_filter_file, make_backup, copy_sound_file, get_filter_directory
+from core.sound_ops import (
+    block_bounds as _so_block_bounds,
+    set_custom_sound as _so_set_custom_sound,
+    remove_custom_sound as _so_remove_custom_sound,
+)
 from core.parser import (
     SOUND_RE_CUSTOM, SOUND_RE_PLAY, SECTION_RE, SUBSECTION_RE,
     TYPE_TAG_RE, TIER_TAG_RE, STYLE_TAG_RE, FilterParser,
@@ -266,55 +271,74 @@ class FilterSoundEditor:
                                        font=("Segoe UI", 12))
         self.file_label.pack(side="left", padx=6, pady=8)
 
-        # Top controls
+        # Top controls — grouped into labeled clusters separated by thin dividers
+        # so the toolbar reads cleanly left→right: File | Economy Tier | Search … |
+        # Appearance. All the same controls as before, just organized.
         top_controls = ctk.CTkFrame(tab_edit, corner_radius=12)
         top_controls.pack(fill="x", padx=6, pady=(0, 10))
 
-        self.load_button = ctk.CTkButton(top_controls, text="📂 Load Filter File", command=self.load_filter, width=150)
-        self.load_button.pack(side="left", padx=(10, 10), pady=10)
+        _DIV_COLOR = ("gray75", "gray30")  # appearance-aware divider colour
 
-        # Economy Tier Visual Preset: instantly restyle the filter by value tier.
-        # Acts as an action trigger -- choosing a mode opens the preview dialog,
-        # then the dropdown resets to "Off". Default is "Off" (does nothing).
+        def _cluster(label_text):
+            c = ctk.CTkFrame(top_controls, fg_color="transparent")
+            ctk.CTkLabel(c, text=label_text, font=("Segoe UI Semibold", 10),
+                         text_color=("gray45", "gray60")).pack(side="left", padx=(8, 6))
+            return c
+
+        def _divider(side="left"):
+            ctk.CTkFrame(top_controls, width=2, fg_color=_DIV_COLOR).pack(
+                side=side, fill="y", padx=4, pady=8)
+
+        # --- File cluster ---
+        file_cluster = _cluster("File")
+        self.load_button = ctk.CTkButton(file_cluster, text="📂 Load Filter",
+                                         command=self.load_filter, width=130)
+        self.load_button.pack(side="left", padx=(0, 8), pady=8)
+        file_cluster.pack(side="left", padx=(6, 0), pady=6)
+        _divider()
+
+        # --- Economy Tier cluster --- (choosing a mode opens the preview dialog,
+        # then resets to "Off"; default "Off" does nothing).
+        tier_cluster = _cluster("Economy Tier")
         self.economy_mode_selector = ctk.CTkOptionMenu(
-            top_controls,
-            values=ECONOMY_TIER_MODES,
-            command=self._on_economy_mode_selected,
-            width=270,
+            tier_cluster, values=ECONOMY_TIER_MODES,
+            command=self._on_economy_mode_selected, width=260,
         )
         self.economy_mode_selector.set("Off")
-        self.economy_mode_selector.pack(side="left", padx=(0, 10), pady=10)
+        self.economy_mode_selector.pack(side="left", padx=(0, 8), pady=8)
+        tier_cluster.pack(side="left", pady=6)
+        _divider()
 
-        self.search_box = ctk.CTkEntry(top_controls, height=36,
-                                       placeholder_text="Search rarity, sound, id, effect, minimap, class, basetype... (Ctrl+F)")
-        self.search_box.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=10)
-        self.search_box.bind("<KeyRelease>", self.apply_filter)
-
-        self.hide_no_sound_cb = ctk.CTkCheckBox(top_controls, text="Show only items with sound",
-                                                variable=self.hide_no_sound_var,
-                                                command=self.apply_filter)
-        self.hide_no_sound_cb.pack(side="left", padx=(0, 10), pady=10)
-
-        # Theme picker (live-switching). Replaces the old broken CTk theme dropdown.
-        ctk.CTkLabel(top_controls, text="Theme:").pack(side="right", padx=(4, 4), pady=10)
+        # --- Appearance cluster (right-aligned) ---
+        appearance_cluster = _cluster("Appearance")
         self.theme_selector = ctk.CTkOptionMenu(
-            top_controls,
-            values=palette_names(),
-            command=self.change_theme,
-            width=220,
+            appearance_cluster, values=palette_names(), command=self.change_theme, width=190,
         )
         self.theme_selector.set(self.settings.theme_palette if self.settings.theme_palette in palette_names() else palette_names()[0])
-        self.theme_selector.pack(side="right", padx=(0, 10), pady=10)
-
-        ctk.CTkLabel(top_controls, text="Mode:").pack(side="right", padx=(10, 4), pady=10)
+        self.theme_selector.pack(side="left", padx=(0, 6), pady=8)
         self.appearance_selector = ctk.CTkOptionMenu(
-            top_controls,
-            values=["System", "Light", "Dark"],
-            command=self.change_appearance_mode,
-            width=100,
+            appearance_cluster, values=["System", "Light", "Dark"],
+            command=self.change_appearance_mode, width=100,
         )
         self.appearance_selector.set(self.settings.appearance_mode if self.settings.appearance_mode in ("System", "Light", "Dark") else "Dark")
-        self.appearance_selector.pack(side="right", padx=(0, 4), pady=10)
+        self.appearance_selector.pack(side="left", padx=(0, 8), pady=8)
+        appearance_cluster.pack(side="right", padx=(0, 6), pady=6)
+        _divider(side="right")
+
+        # --- Search cluster (fills the middle) ---
+        search_cluster = _cluster("Search")
+        self.search_box = ctk.CTkEntry(
+            search_cluster, height=34,
+            placeholder_text="Search rarity, sound, class, basetype… (Ctrl+F)",
+        )
+        self.search_box.pack(side="left", fill="x", expand=True, padx=(0, 8), pady=8)
+        self.search_box.bind("<KeyRelease>", self.apply_filter)
+        self.hide_no_sound_cb = ctk.CTkCheckBox(
+            search_cluster, text="Only with sound",
+            variable=self.hide_no_sound_var, command=self.apply_filter,
+        )
+        self.hide_no_sound_cb.pack(side="left", padx=(0, 8), pady=8)
+        search_cluster.pack(side="left", fill="x", expand=True, pady=6)
 
         # Data area
         body = ctk.CTkFrame(tab_edit, corner_radius=12)
@@ -799,21 +823,33 @@ class FilterSoundEditor:
                               command=lambda: (self.hide_no_sound_var.set(not self.hide_no_sound_var.get()), self.apply_filter()))
         menubar.add_cascade(label="View", menu=view_menu)
 
-        # ----- Tools -----
-        tools_menu = tk.Menu(menubar, tearoff=False)
-        tools_menu.add_command(label="Verify & Fix Sounds…", accelerator="Ctrl+H", command=self.verify_and_fix_sounds)
-        tools_menu.add_command(label="Make Sounds Unique…", accelerator="Ctrl+U", command=self.make_sounds_unique)
-        tools_menu.add_command(label="Check Filter Compatibility…", command=self.check_filter_compatibility)
-        tools_menu.add_separator()
-        tools_menu.add_command(label="Emphasize by Tier…", command=self.emphasize_by_tier)
-        tools_menu.add_command(label="Randomize Visuals…", command=self.randomize_visuals)
-        tools_menu.add_command(label="Economy Tier Visuals…", command=self.open_economy_tier_visuals)
-        tools_menu.add_separator()
-        tools_menu.add_command(label="Sound File Manager…", command=self.open_sound_manager)
-        tools_menu.add_command(label="Filter Statistics…", command=self.show_filter_statistics)
-        tools_menu.add_separator()
-        tools_menu.add_command(label="Settings…", accelerator="Ctrl+,", command=self.open_settings_dialog)
-        menubar.add_cascade(label="Tools", menu=tools_menu)
+        # ----- Sounds ----- (everything about drop sounds lives here)
+        sounds_menu = tk.Menu(menubar, tearoff=False)
+        sounds_menu.add_command(label="Set Tier Sounds…", command=self.open_tier_sounds)
+        sounds_menu.add_command(label="Sound File Manager…", command=self.open_sound_manager)
+        sounds_menu.add_separator()
+        sounds_menu.add_command(label="Verify & Fix Sounds…", accelerator="Ctrl+H", command=self.verify_and_fix_sounds)
+        sounds_menu.add_command(label="Make Sounds Unique…", accelerator="Ctrl+U", command=self.make_sounds_unique)
+        menubar.add_cascade(label="Sounds", menu=sounds_menu)
+
+        # ----- Visuals & Tiers ----- (colours, effects, economy tiers)
+        visuals_menu = tk.Menu(menubar, tearoff=False)
+        visuals_menu.add_command(label="Economy Tier Visuals…", command=self.open_economy_tier_visuals)
+        visuals_menu.add_separator()
+        visuals_menu.add_command(label="Emphasize by Tier…", command=self.emphasize_by_tier)
+        visuals_menu.add_command(label="Randomize Visuals…", command=self.randomize_visuals)
+        menubar.add_cascade(label="Visuals & Tiers", menu=visuals_menu)
+
+        # ----- Filter Health ----- (check & inspect the filter itself)
+        health_menu = tk.Menu(menubar, tearoff=False)
+        health_menu.add_command(label="Check Filter Compatibility…", command=self.check_filter_compatibility)
+        health_menu.add_command(label="Filter Statistics…", command=self.show_filter_statistics)
+        menubar.add_cascade(label="Filter Health", menu=health_menu)
+
+        # ----- Settings ----- (top-level so it's easy to find)
+        settings_menu = tk.Menu(menubar, tearoff=False)
+        settings_menu.add_command(label="Settings…", accelerator="Ctrl+,", command=self.open_settings_dialog)
+        menubar.add_cascade(label="Settings", menu=settings_menu)
 
         # ----- Help -----
         help_menu = tk.Menu(menubar, tearoff=False)
@@ -1680,25 +1716,12 @@ class FilterSoundEditor:
         touched = 0
         for start_idx, sample in ordered:
             b_start, b_end = self._block_bounds(start_idx)
-            replaced_any = False
-            for i in range(b_start, b_end):
-                raw = self.lines[i].rstrip("\n")
-                stripped = raw.strip()
-                leading = raw[:len(raw) - len(raw.lstrip(" \t"))]
-                m_c = SOUND_RE_CUSTOM.match(stripped)
-                m_p = SOUND_RE_PLAY.match(stripped)
-                if m_c:
-                    comment_prefix, kw, _filename, vol = m_c.groups()
-                    vol_part = f" {vol}" if vol else " 300"
-                    self.lines[i] = f'{leading}{(comment_prefix or "")}{kw} "{new_filename}"{vol_part}\n'
-                    replaced_any = True
-                elif m_p:
-                    comment_prefix, kw, _sid, vol = m_p.groups()
-                    vol_part = f" {vol}" if vol else " 300"
-                    self.lines[i] = f'{leading}{(comment_prefix or "")}CustomAlertSound "{new_filename}"{vol_part}\n'
-                    replaced_any = True
-            if not replaced_any:
-                self._insert_custom_sound(start_idx, new_filename, volume=300)
+            # Bulk-replace semantics: rewrite existing sound line(s) (including a
+            # commented-out one, kept commented) preserving their volume, else add.
+            _so_set_custom_sound(
+                self.lines, b_start, b_end, new_filename, 300,
+                preserve_volume=True, keep_disabled=True, active_only=False,
+            )
             touched += 1
 
         try:
@@ -2507,6 +2530,54 @@ class FilterSoundEditor:
         if not value or value == "Off":
             return
         self.open_economy_tier_visuals(start_mode=value)
+
+    def open_tier_sounds(self):
+        """Open the per-tier sound assigner (Sounds menu)."""
+        try:
+            from ui.tier_sound_dialog import open_tier_sound_dialog
+        except Exception as e:  # pragma: no cover - import guard
+            messagebox.showerror(
+                "Tier Sounds",
+                f"This feature could not be loaded:\n{e}\n\n"
+                "Install requirements (pip install -r requirements.txt) and retry.",
+            )
+            return
+        open_tier_sound_dialog(self)
+
+    def apply_custom_sound_to_blocks(self, start_indices, sound_path, volume=300) -> int:
+        """Copy ``sound_path`` into the filter folder and set it as the
+        CustomAlertSound on every block whose header line is in ``start_indices``.
+
+        Saves with the standard automatic backup and refreshes the table. Only
+        sound lines are touched. Returns the number of blocks updated.
+        """
+        starts = sorted(set(start_indices), reverse=True)
+        if not self.filter_path or not starts:
+            return 0
+        dest_dir = os.path.dirname(self.filter_path)
+        filename = os.path.basename(sound_path)
+        copy_sound_file(sound_path, dest_dir)  # may raise -> caller handles
+        for start in starts:  # descending so inserts don't shift earlier blocks
+            b_start, b_end = _so_block_bounds(self.lines, start)
+            _so_set_custom_sound(self.lines, b_start, b_end, filename, volume)
+        self.save_filter()
+        self.refresh_filter_data()
+        return len(starts)
+
+    def remove_sound_from_blocks(self, start_indices) -> int:
+        """Remove the active sound directive from each given block. Returns the
+        number of blocks that had a sound removed."""
+        starts = sorted(set(start_indices), reverse=True)
+        if not self.filter_path or not starts:
+            return 0
+        removed = 0
+        for start in starts:
+            b_start, b_end = _so_block_bounds(self.lines, start)
+            if _so_remove_custom_sound(self.lines, b_start, b_end):
+                removed += 1
+        self.save_filter()
+        self.refresh_filter_data()
+        return removed
 
     def _run_compatibility_check(self, auto: bool = False) -> None:
         """Scan the current filter for unknown commands, deprecated syntax,

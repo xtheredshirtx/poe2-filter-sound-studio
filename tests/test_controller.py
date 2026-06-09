@@ -92,6 +92,17 @@ def test_fingerprint_determinism(temp_filter, isolated_history):
     assert a.fingerprint == b.fingerprint
 
 
+def test_tier_block_starts_groups_by_tier(temp_filter, isolated_history):
+    path = temp_filter(TEXT)
+    ctrl = _ctrl(path)
+    mapping = ctrl.tier_block_starts(TEXT, Mode.APPLY_CHANCE, "low")
+    # Divine Orb block (starts at line 0) is S; Sapphire Ring Normal -> chance base.
+    assert 0 in mapping.get("S", [])
+    assert 5 in mapping.get("SS_CHANCE_BASE", [])
+    # The Hide block (line 8) is excluded from every tier.
+    assert all(8 not in starts for starts in mapping.values())
+
+
 def test_graceful_disable_on_bad_data(temp_filter, isolated_history, monkeypatch):
     def boom(*_a, **_k):
         raise TierDataError("simulated bad data")

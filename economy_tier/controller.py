@@ -183,6 +183,39 @@ class EconomyTierController:
     def has_restorable(self) -> bool:
         return self._history.has_restorable(self.filter_path)
 
+    # ----- tier -> blocks (for the per-tier sound assigner) ---------------
+
+    def tier_block_starts(
+        self,
+        text: str,
+        mode: Mode,
+        min_confidence: str = "medium",
+    ) -> dict[str, list[int]]:
+        """Map each value tier to the START line indices of its Show blocks.
+
+        Pure: classifies ``text`` fresh (so it always reflects the current file)
+        and returns ``{tier: [block_start_line_index, ...]}`` for blocks that are
+        classified and applicable at ``min_confidence``. Hidden blocks are
+        excluded. Used by the per-tier sound assigner to know which blocks to
+        apply a sound to.
+        """
+        if not self.available:
+            raise EconomyTierError(self.disabled_reason or "Feature unavailable")
+        min_conf = _confidence_from_str(min_confidence)
+        opts = ClassifyOptions(
+            enable_chance_boost=(mode == Mode.APPLY_CHANCE),
+            min_confidence=min_conf,
+            skip_hidden=True,
+        )
+        doc = parse(text)
+        result = classify(doc, self.data, opts)
+        out: dict[str, list[int]] = {}
+        for c in result.classifications:
+            if c.tier is None or not c.applicable(min_conf):
+                continue
+            out.setdefault(c.tier, []).append(doc.blocks[c.block_index].start)
+        return out
+
     # ----- preview --------------------------------------------------------
 
     def build_preview(
