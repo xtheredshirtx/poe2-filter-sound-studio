@@ -13,7 +13,7 @@ matched items *look*.
 
 - **Uniform tier visuals.** Each tier gets one text/background/border colour,
   font size, `PlayEffect`, and `MinimapIcon` from the active template.
-- **Five modes** (dropdown in the main window, or **Tools → Economy Tier
+- **Five modes** (dropdown in the main window, or **Visuals & Tiers → Economy Tier
   Visuals…**):
   1. `Off` (default — does nothing)
   2. `Preview Only` — shows the diff; **never writes to disk, never makes a backup**

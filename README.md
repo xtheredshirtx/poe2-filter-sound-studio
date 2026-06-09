@@ -45,6 +45,9 @@ App identity in code:
 - Previews custom sound files through several possible audio backends.
 - Edits `SetTextColor`, `SetBorderColor`, and `SetBackgroundColor` rules with an
   RGBA color picker.
+- Restyles the whole filter by **economy value tier** (SS → F), with an editable
+  per-tier style editor and named presets.
+- Sets **one drop sound for every item in a value tier** at once.
 - Tracks missing and unused sound files in the filter folder.
 - Migrates sounds from an old season filter into a new season filter with fuzzy
   block matching.
@@ -54,17 +57,17 @@ App identity in code:
 
 ### Option 1: Run From Source
 
-Install Python 3.8 or newer, then install the required UI dependency:
+Install Python 3.10 or newer, then install the dependencies:
 
 ```powershell
-py -m pip install customtkinter
+py -m pip install -r requirements.txt
 ```
 
-Optional audio-preview packages:
-
-```powershell
-py -m pip install python-vlc pygame pydub simpleaudio playsound
-```
+That installs the required packages (`customtkinter` for the UI, `jsonschema`
+for the Economy Tier data files) plus the optional audio-preview backends
+(`python-vlc`, `pygame`, `pydub`, `playsound`). You can also install just the
+core UI dependency with `py -m pip install customtkinter jsonschema` — audio
+preview is optional and the rest of the app works without it.
 
 Then start the app:
 
@@ -123,6 +126,69 @@ The main table columns are:
 - `Minimap`: Short form of the `MinimapIcon` rule.
 - `Item Context`: Relevant criteria such as `Class`, `BaseType`, `ItemLevel`,
   `SetFontSize`, colors, effects, and minimap rules.
+
+## The Window At A Glance
+
+Across the **top toolbar**, controls are grouped into labeled clusters separated
+by dividers, so they read left-to-right:
+
+- **File** — `📂 Load Filter`.
+- **Economy Tier** — a dropdown that restyles the filter by value tier (see
+  [Economy Tier Visual Preset](#economy-tier-visual-preset)). It acts as an
+  action trigger: pick a mode and the preview dialog opens, then it resets to
+  `Off`.
+- **Search** — the search box and the `Only with sound` toggle.
+- **Appearance** — the color **Theme** and **Light/Dark** mode pickers.
+
+Below that are three **action button bars** (sound actions, "On filtered set"
+bulk actions, and Color Tools). These **wrap onto more rows automatically** if
+the window is narrow, so no button is ever cut off. At the very bottom is the
+**status bar** with a clickable health pill.
+
+## Menus: Where Everything Lives
+
+Every feature is reachable from the menu bar, grouped by task:
+
+### File
+- **Open Filter…** (`Ctrl+O`) — load a `.filter` file.
+- **Save** (`Ctrl+S`) — save the current filter (with a backup).
+- **Save As…** — save a copy under a new name.
+- **Reload from disk** (`F5`) — re-load the file, discarding unsaved changes.
+- **Recent Filters** — re-open a recently used filter.
+- **Open POE2 Filter Folder** — open the detected Path of Exile 2 filter folder.
+- **Open Current Filter Folder** — open the folder of the loaded filter.
+- **Quit** (`Ctrl+Q`).
+
+### View
+- **Appearance Mode** — System / Light / Dark.
+- **Color Theme** — pick a UI color palette.
+- **Toggle Show-only-with-sound** — hide rows that have no sound.
+
+### Sounds
+- **Set Tier Sounds…** — set one sound for every item in a value tier at once
+  (see [Set Tier Sounds](#set-tier-sounds-by-economy-value)).
+- **Sound File Manager…** — see missing/orphan/used sound files; delete orphans.
+- **Verify & Fix Sounds…** (`Ctrl+H`) — find and repair missing sound references
+  and archive unused files.
+- **Make Sounds Unique…** (`Ctrl+U`) — spread different sounds across the visible
+  rows.
+
+### Visuals & Tiers
+- **Economy Tier Visuals…** — restyle the whole filter by value tier; includes
+  **🎨 Edit Tier Styles…** for editing per-tier colours/effects and saving presets.
+- **Emphasize by Tier…** — quick visual emphasis based on the filter's own grading.
+- **Randomize Visuals…** — assign curated random colour schemes per block.
+
+### Filter Health
+- **Check Filter Compatibility…** — scan for unknown/deprecated directives and
+  offer migration fixes.
+- **Filter Statistics…** — a summary of blocks, sounds, sections, and more.
+
+### Settings
+- **Settings…** (`Ctrl+,`) — see [Settings](#settings).
+
+### Help
+- **POE2 Filter Syntax (web)**, **FilterBlade Editor (web)**, and **About**.
 
 ## Search And Categories
 
@@ -251,8 +317,8 @@ block, classifies the items it matches into a value tier (SS → F, plus the
 special `SS_CHANCE_BASE` for high-value chancing bases), and applies one
 consistent look per tier across every item category.
 
-Use the **Economy Tier** dropdown in the top toolbar, or **Tools → Economy Tier
-Visuals…**. Modes: `Off` (default), `Preview Only`, `Apply Economy Tier Visuals`,
+Use the **Economy Tier** dropdown in the top toolbar, or **Visuals & Tiers →
+Economy Tier Visuals…**. Modes: `Off` (default), `Preview Only`, `Apply Economy Tier Visuals`,
 `Apply Economy Tier Visuals Plus Chance Base Boost`, and `Restore Previous
 Visuals`. Every apply shows a preview diff first and writes a verified backup to
 `backups/` before saving.
@@ -291,7 +357,7 @@ recognizes these extensions:
 
 ### Verify And Fix Sounds
 
-Use `Tools > Verify & Fix Sounds` or press `Ctrl+H`.
+Use `Sounds > Verify & Fix Sounds` or press `Ctrl+H`.
 
 The tool finds:
 
@@ -312,7 +378,7 @@ old sound files/
 
 ### Sound File Manager
 
-Use `Tools > Sound File Manager` to view:
+Use `Sounds > Sound File Manager` to view:
 
 - Missing referenced files
 - Orphan files
@@ -323,7 +389,7 @@ permanent.
 
 ### Make Sounds Unique
 
-Use `Tools > Make Sounds Unique` or press `Ctrl+U`.
+Use `Sounds > Make Sounds Unique` or press `Ctrl+U`.
 
 This operates on visible active `CustomAlertSound` rows only, so the sidebar and
 search box define the working set. Commented-out rules are ignored.
@@ -437,7 +503,7 @@ Stored settings include:
 
 Open settings with:
 
-- `Tools > Settings`
+- `Settings > Settings…`
 - `Ctrl+,`
 
 ## Keyboard Shortcuts
