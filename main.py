@@ -182,6 +182,52 @@ except Exception:
     winsound = None
 
 
+class FlowBar(ctk.CTkFrame):
+    """A horizontal bar of widgets that *wraps* onto more rows when the window is
+    too narrow, so buttons are never clipped off the edge of the window.
+
+    Add children with ``add(widget)`` instead of packing them. The bar re-lays
+    its children out (via ``place``) whenever it's resized and grows/shrinks its
+    own height to fit, so every button is always visible at any window width.
+    """
+
+    def __init__(self, master, *, hgap=8, vgap=8, pad=10, **kwargs):
+        super().__init__(master, **kwargs)
+        self._items = []
+        self._hgap, self._vgap, self._pad = hgap, vgap, pad
+        self.pack_propagate(False)
+        self.configure(height=54)
+        self.bind("<Configure>", self._reflow)
+
+    def add(self, widget):
+        self._items.append(widget)
+        return widget
+
+    def _reflow(self, _event=None):
+        width = self.winfo_width()
+        if width <= 1:
+            return
+        x = self._pad
+        y = self._pad
+        row_h = 0
+        bottom = self._pad
+        for w in self._items:
+            rw = w.winfo_reqwidth()
+            rh = w.winfo_reqheight()
+            # Wrap to the next row if this widget would overflow the right edge.
+            if x != self._pad and x + rw > width - self._pad:
+                x = self._pad
+                y += row_h + self._vgap
+                row_h = 0
+            w.place(x=x, y=y)
+            x += rw + self._hgap
+            row_h = max(row_h, rh)
+            bottom = max(bottom, y + rh)
+        new_h = bottom + self._pad
+        if abs(new_h - self.winfo_height()) > 1:
+            self.configure(height=new_h)
+
+
 class FilterSoundEditor:
     def __init__(self, root):
         self.root = root
@@ -454,86 +500,72 @@ class FilterSoundEditor:
         self.context_label = ctk.CTkLabel(context_panel, text="Item Context: ", wraplength=1200, justify="left")
         self.context_label.pack(anchor="w", padx=10, pady=10)
 
-        # Options bar
-        options = ctk.CTkFrame(tab_edit, corner_radius=12)
-        options.pack(fill="x", padx=6, pady=6)
+        # Options bar — a wrapping FlowBar so the buttons reflow onto more rows
+        # on a narrow window instead of being clipped off the edge.
+        options = FlowBar(tab_edit, corner_radius=12)
+        options.pack(fill="x", padx=6, pady=(6, 4))
 
-        self.bulk_checkbox = ctk.CTkCheckBox(options, text="Bulk replace/add for all matching rows", variable=self.bulk_mode)
-        self.bulk_checkbox.pack(side="left", padx=10, pady=10)
-
+        self.bulk_checkbox = ctk.CTkCheckBox(options, text="Bulk: all matching rows", variable=self.bulk_mode)
+        options.add(self.bulk_checkbox)
         self.replace_button = ctk.CTkButton(options, text="🔁 Replace / Add Sound…", command=self.replace_sound, width=210)
-        self.replace_button.pack(side="left", padx=10, pady=10)
-
+        options.add(self.replace_button)
         self.volume_button = ctk.CTkButton(options, text="🔊 Change Volume…", command=self.change_volume, width=170)
-        self.volume_button.pack(side="left", padx=10, pady=10)
-
-        # Preview controls
+        options.add(self.volume_button)
         self.preview_changed_button = ctk.CTkButton(options, text="▶ Play Last Change", command=self.preview_last_change, state="disabled", width=170)
-        self.preview_changed_button.pack(side="left", padx=10, pady=10)
-
+        options.add(self.preview_changed_button)
         self.preview_selected_button = ctk.CTkButton(options, text="▶ Play Selected", command=self.preview_selected, width=150)
-        self.preview_selected_button.pack(side="left", padx=10, pady=10)
-
+        options.add(self.preview_selected_button)
         self.stop_button = ctk.CTkButton(options, text="⏹ Stop", command=self.stop_preview, width=120)
-        self.stop_button.pack(side="left", padx=10, pady=10)
+        options.add(self.stop_button)
 
-        # Filtered-set bulk operations (acts on whatever the sidebar+search is currently showing)
-        bulk_options = ctk.CTkFrame(tab_edit, corner_radius=12)
-        bulk_options.pack(fill="x", padx=6, pady=6)
-        ctk.CTkLabel(bulk_options, text="On filtered set:", font=("Segoe UI", 11, "bold")).pack(side="left", padx=(10, 6), pady=10)
+        # Filtered-set bulk operations (acts on whatever the sidebar+search shows)
+        bulk_options = FlowBar(tab_edit, corner_radius=12)
+        bulk_options.pack(fill="x", padx=6, pady=4)
+        bulk_options.add(ctk.CTkLabel(bulk_options, text="On filtered set:", font=("Segoe UI", 11, "bold")))
         self.bulk_replace_filtered_btn = ctk.CTkButton(
             bulk_options, text="🔁 Replace Sound in Visible…",
             command=self.replace_sound_in_filtered, width=220,
         )
-        self.bulk_replace_filtered_btn.pack(side="left", padx=5, pady=10)
+        bulk_options.add(self.bulk_replace_filtered_btn)
         self.bulk_volume_filtered_btn = ctk.CTkButton(
             bulk_options, text="🔊 Set Volume on Visible…",
             command=self.set_volume_in_filtered, width=200,
         )
-        self.bulk_volume_filtered_btn.pack(side="left", padx=5, pady=10)
+        bulk_options.add(self.bulk_volume_filtered_btn)
         self.bulk_mute_filtered_btn = ctk.CTkButton(
-            bulk_options, text="🔇 Mute Visible (comment out)",
-            command=self.mute_filtered, width=220, fg_color="#5b3a0c",
+            bulk_options, text="🔇 Mute Visible", command=self.mute_filtered,
+            width=150, fg_color="#5b3a0c",
         )
-        self.bulk_mute_filtered_btn.pack(side="left", padx=5, pady=10)
+        bulk_options.add(self.bulk_mute_filtered_btn)
         self.bulk_unmute_filtered_btn = ctk.CTkButton(
-            bulk_options, text="🔈 Un-mute Visible",
-            command=self.unmute_filtered, width=170,
+            bulk_options, text="🔈 Un-mute Visible", command=self.unmute_filtered, width=170,
         )
-        self.bulk_unmute_filtered_btn.pack(side="left", padx=5, pady=10)
-
-        # Prominent shortcuts to sound-health workflows (right-aligned)
+        bulk_options.add(self.bulk_unmute_filtered_btn)
         self.verify_sounds_btn = ctk.CTkButton(
             bulk_options, text="🩺 Verify & Fix Sounds…",
             command=self.verify_and_fix_sounds, width=210,
         )
-        self.verify_sounds_btn.pack(side="right", padx=10, pady=10)
+        bulk_options.add(self.verify_sounds_btn)
         self.unique_sounds_btn = ctk.CTkButton(
             bulk_options, text="🎲 Make Sounds Unique…",
             command=self.make_sounds_unique, width=210,
         )
-        self.unique_sounds_btn.pack(side="right", padx=4, pady=10)
+        bulk_options.add(self.unique_sounds_btn)
 
-        # Color editing buttons (new row)
-        color_options = ctk.CTkFrame(tab_edit, corner_radius=12)
-        color_options.pack(fill="x", padx=6, pady=6)
-
-        ctk.CTkLabel(color_options, text="Color Tools:", font=("Segoe UI", 11, "bold")).pack(side="left", padx=(10, 5), pady=10)
-
+        # Color editing buttons (wrapping row)
+        color_options = FlowBar(tab_edit, corner_radius=12)
+        color_options.pack(fill="x", padx=6, pady=(4, 6))
+        color_options.add(ctk.CTkLabel(color_options, text="Color Tools:", font=("Segoe UI", 11, "bold")))
         self.edit_colors_button = ctk.CTkButton(color_options, text="🎨 Edit Colors…", command=self.edit_colors, width=150)
-        self.edit_colors_button.pack(side="left", padx=5, pady=10)
-
+        color_options.add(self.edit_colors_button)
         self.copy_colors_button = ctk.CTkButton(color_options, text="🖌 Copy Colors", command=self.copy_colors, width=140)
-        self.copy_colors_button.pack(side="left", padx=5, pady=10)
-
+        color_options.add(self.copy_colors_button)
         self.paste_colors_button = ctk.CTkButton(color_options, text="📋 Paste Colors", command=self.paste_colors, width=140, state="disabled")
-        self.paste_colors_button.pack(side="left", padx=5, pady=10)
-
+        color_options.add(self.paste_colors_button)
         self.preview_item_button = ctk.CTkButton(color_options, text="👁 Preview Item", command=self.preview_item_colors, width=140)
-        self.preview_item_button.pack(side="left", padx=5, pady=10)
-
+        color_options.add(self.preview_item_button)
         self.remove_colors_button = ctk.CTkButton(color_options, text="🗑 Remove Colors", command=self.remove_colors, width=150, fg_color="darkred")
-        self.remove_colors_button.pack(side="left", padx=5, pady=10)
+        color_options.add(self.remove_colors_button)
 
         # ---------- Status bar with health indicator ----------
         status_bar = ctk.CTkFrame(tab_edit, corner_radius=0, fg_color="transparent")
