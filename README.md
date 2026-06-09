@@ -143,6 +143,16 @@ The sidebar includes:
 
 ## Sound Editing
 
+### Set Tier Sounds (by economy value)
+
+**Sounds → Set Tier Sounds…** lets you give every item in a value tier the same
+drop sound in one step. The dialog lists each tier (SS_CHANCE_BASE … F) with the
+number of blocks in it; click **🔊 Set Sound…** on a tier, pick an audio file, and
+that `CustomAlertSound` is applied to every block in that tier (or **Remove** to
+clear it). A backup is always made first, and only the sound line changes —
+colours and conditions are left alone. The Mode/Min-confidence selectors control
+which blocks count as each tier (same logic as the Economy Tier visuals).
+
 ### Replace Or Add Sound
 
 Select a row, click `Replace / Add Sound`, and choose an audio file.
@@ -456,6 +466,7 @@ POE2 Item Filter Sound Replacer/
     data_models.py                FilterBlock, ColorData, SimilarityMatch,
                                    ColorTemplate
     parser.py                     Filter parsing, regexes, color helpers
+    sound_ops.py                  Pure block-level sound directive editing
     file_operations.py            Load, save, backup, sound copy helpers
     settings.py                   Persistent user settings
     compatibility.py              Migration rule loader
@@ -473,6 +484,7 @@ POE2 Item Filter Sound Replacer/
     visual_tools_dialog.py        Emphasize-by-tier / randomizer UI
     economy_tier_ui.py            Economy Tier Visual Preset dialog
     economy_tier_editor.py        Per-tier style editor (named presets)
+    tier_sound_dialog.py          Per-tier sound assigner
 
   economy_tier/                   Economy Tier Visual Preset (pure core + I/O)
     filter_parser.py              Round-trip-fidelity parser (operator-aware)
