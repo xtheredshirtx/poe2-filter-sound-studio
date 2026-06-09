@@ -885,6 +885,8 @@ class FilterSoundEditor:
 
         # ----- Help -----
         help_menu = tk.Menu(menubar, tearoff=False)
+        help_menu.add_command(label="How to Use…", command=self.show_how_to_use_dialog)
+        help_menu.add_separator()
         help_menu.add_command(label="POE2 Filter Syntax (web)",
                               command=lambda: webbrowser.open("https://www.pathofexile.com/forum/view-thread/3683711"))
         help_menu.add_command(label="FilterBlade Editor (web)",
@@ -2804,6 +2806,82 @@ class FilterSoundEditor:
     # ============================================================
     # About dialog
     # ============================================================
+    HOW_TO_USE_TEXT = (
+        "Quick guide — everything in this app is also under the menus:\n"
+        "File · View · Sounds · Visuals & Tiers · Filter Health · Settings · Help.\n"
+        "\n"
+        "1) LOAD A FILTER\n"
+        "   • Click  📂 Load Filter  (top-left), or File → Open Filter (Ctrl+O).\n"
+        "   • Your blocks fill the table. Use the left sidebar categories and the\n"
+        "     Search box to find the items you care about.\n"
+        "\n"
+        "2) CHANGE A DROP SOUND\n"
+        "   • Select a row, click  🔁 Replace / Add Sound… , and pick an audio file.\n"
+        "   • The  On filtered set  buttons change the sound/volume for everything\n"
+        "     currently visible (handy for 'all uniques', 'all currency', etc.).\n"
+        "   • Preview with  ▶ Play Selected .\n"
+        "\n"
+        "3) SET ONE SOUND FOR A WHOLE VALUE TIER\n"
+        "   • Sounds → Set Tier Sounds…  Pick a tier (SS…F) and choose a sound; it's\n"
+        "     applied to every item in that tier at once.\n"
+        "\n"
+        "4) RESTYLE / RECOLOR BY VALUE\n"
+        "   • Use the  Economy Tier  dropdown (top toolbar) or Visuals & Tiers →\n"
+        "     Economy Tier Visuals…  Try  Preview Only  first — it shows the changes\n"
+        "     before anything is saved.\n"
+        "   • Click  🎨 Edit Tier Styles…  to choose each tier's colours, light beam\n"
+        "     (PlayEffect) and minimap marker, and save it as a named preset.\n"
+        "\n"
+        "5) COLOR A SINGLE BLOCK\n"
+        "   • Select a row, then use the  Color Tools  buttons (Edit / Copy / Paste /\n"
+        "     Preview / Remove).\n"
+        "\n"
+        "6) KEEP YOUR SOUNDS HEALTHY\n"
+        "   • Sounds → Verify & Fix Sounds…  finds missing or unused sound files and\n"
+        "     repairs the references. The status pill (bottom-right) shows health.\n"
+        "\n"
+        "7) MOVE SOUNDS TO A NEW SEASON'S FILTER\n"
+        "   • Open the  Merge  tab to copy your custom sounds into a fresh filter.\n"
+        "\n"
+        "SAFETY\n"
+        "   • Every change makes a timestamped backup first (in a *_backups folder\n"
+        "     next to your filter). There is no undo button — roll back with a backup,\n"
+        "     or use Economy Tier → Restore Previous Visuals.\n"
+        "\n"
+        "Need more detail? Click 'Open Full Guide' below for the complete README."
+    )
+
+    README_URL = "https://github.com/xtheredshirtx/poe2-filter-sound-studio#readme"
+
+    def show_how_to_use_dialog(self):
+        dlg = ctk.CTkToplevel(self.root)
+        pal = self.theme_manager.current()
+        f = ctk.CTkFrame(dlg, fg_color=pal.panel)
+        f.pack(fill="both", expand=True, padx=16, pady=16)
+
+        ctk.CTkLabel(f, text="How to Use", font=("Segoe UI Semibold", 18)).pack(anchor="w")
+        ctk.CTkLabel(
+            f, text="A quick tour of what each part of the app does.",
+            text_color=pal.text_muted,
+        ).pack(anchor="w", pady=(0, 8))
+
+        box = ctk.CTkTextbox(f, wrap="word", width=660, height=440,
+                             font=("Segoe UI", 12))
+        box.pack(fill="both", expand=True)
+        box.insert("1.0", self.HOW_TO_USE_TEXT)
+        box.configure(state="disabled")
+
+        link_row = ctk.CTkFrame(f, fg_color="transparent")
+        link_row.pack(fill="x", pady=(10, 0))
+        ctk.CTkButton(link_row, text="📖 Open Full Guide (online)",
+                      command=lambda: webbrowser.open(self.README_URL), width=220).pack(side="left", padx=4)
+        ctk.CTkButton(link_row, text="Close", command=dlg.destroy, width=110,
+                      fg_color=pal.panel_alt, hover_color=pal.border,
+                      text_color=pal.text).pack(side="right", padx=4)
+
+        self._setup_dialog(dlg, title="How to Use", default_size=(720, 640),
+                           min_size=(560, 460))
+
     def show_about_dialog(self):
         dlg = ctk.CTkToplevel(self.root)
         pal = self.theme_manager.current()
