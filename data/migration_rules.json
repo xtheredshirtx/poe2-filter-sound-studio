@@ -12,7 +12,6 @@
     "enabled": "true | false",
     "kind": "rename | deprecated | replace | remove (cosmetic label only, used for grouping in the UI)"
   },
-
   "rules": [
     {
       "id": "example-rename-OldSoundCommand",
@@ -50,6 +49,30 @@
       "pattern": "SomeNewCondition",
       "action": "allow",
       "enabled": false
+    },
+    {
+      "id": "allow-HasVaalUniqueMod",
+      "description": "Allow POE2 command 'HasVaalUniqueMod' (whitelisted via right-click).",
+      "match_type": "allow",
+      "pattern": "HasVaalUniqueMod",
+      "action": "allow",
+      "enabled": true
+    },
+    {
+      "id": "allow-IsVaalUnique",
+      "description": "Allow POE2 command 'IsVaalUnique' (whitelisted via right-click).",
+      "match_type": "allow",
+      "pattern": "IsVaalUnique",
+      "action": "allow",
+      "enabled": true
+    },
+    {
+      "id": "allow-AlwaysShow",
+      "description": "Allow POE2 command 'AlwaysShow' (whitelisted via right-click).",
+      "match_type": "allow",
+      "pattern": "AlwaysShow",
+      "action": "allow",
+      "enabled": true
     }
   ]
 }

@@ -40,6 +40,9 @@ from core.compatibility import (
 )
 from ui.compatibility_dialog import show_compatibility_dialog
 from ui.visual_tools_dialog import open_visual_tools
+from core.app_logging import init_logging, get_logger, get_log_path, shutdown as logging_shutdown
+
+log = get_logger(__name__)
 
 # =====================
 # Identity (single source of truth for the app's name and version)
@@ -61,9 +64,31 @@ ECONOMY_TIER_MODES = [
 ]
 
 
+def _writable_app_dir() -> str:
+    """Folder where user-editable files (migration_rules.json, visual_presets.json)
+    should live.
+
+    In source: the project root next to main.py.
+    In a PyInstaller frozen build: the folder containing the .exe — NOT
+    `sys._MEIPASS` (which is a temp dir that gets wiped on every launch).
+    """
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+def _bundled_resource_dir() -> str:
+    """Folder where read-only bundled resources live (icons, fallback data).
+    Resolves to `sys._MEIPASS` in a frozen build, project root in source."""
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return meipass
+    return os.path.dirname(os.path.abspath(__file__))
+
+
 def _resolve_icon_path() -> str:
     """Return the absolute path to the bundled app icon, or '' if none exists."""
-    here = os.path.dirname(os.path.abspath(__file__))
+    here = _bundled_resource_dir()
     candidates = [
         os.path.join(here, "app.ico"),
         os.path.join(here, "icon.ico"),
@@ -446,26 +471,38 @@ class FilterSoundEditor:
         tm.register_widget(self.file_label, tm.ROLE_TEXT_MUTED)
         tm.register_widget(self.sidebar_count_label, tm.ROLE_TEXT_MUTED)
 
-        columns = ("category", "rarity", "stype", "sound", "volume", "effect", "minimap", "context")
-        self.tree = ttk.Treeview(tree_container, columns=columns, show="headings", selectmode="browse")
+        columns = ("category", "item", "tier", "rarity", "stype", "sound", "volume", "effect", "minimap", "context")
+        # "extended" lets the user Ctrl+click to toggle selection and Shift+click
+        # to extend a range — matches what people expect from file managers.
+        self.tree = ttk.Treeview(tree_container, columns=columns, show="headings", selectmode="extended")
+        # Track which columns we have + their human labels so the sort handler
+        # can rewrite the heading text with a ▲/▼ indicator on the active column.
+        self._tree_columns = columns
+        self._tree_heading_text = {
+            "category": "Category", "item": "Item", "tier": "Tier", "rarity": "Rarity",
+            "stype": "Type", "sound": "Sound / ID", "volume": "Vol", "effect": "Effect",
+            "minimap": "Minimap", "context": "Item Context",
+        }
+        self._sort_col = None
+        self._sort_reverse = False
 
-        self.tree.heading("category", text="Category")
-        self.tree.heading("rarity", text="Rarity")
-        self.tree.heading("stype", text="Type")
-        self.tree.heading("sound", text="Sound / ID")
-        self.tree.heading("volume", text="Vol")
-        self.tree.heading("effect", text="Effect")
-        self.tree.heading("minimap", text="Minimap")
-        self.tree.heading("context", text="Item Context")
+        # Bind every heading click to the generic sort handler. The command
+        # captures the column id via default-arg, not closure, so it stays
+        # bound to the right column.
+        for col in columns:
+            self.tree.heading(col, text=self._tree_heading_text[col],
+                              command=lambda c=col: self._sort_tree_by_column(c))
 
-        self.tree.column("category", width=200, anchor="w")
-        self.tree.column("rarity", width=160, anchor="w")
-        self.tree.column("stype", width=90, anchor="w")
-        self.tree.column("sound", width=280, anchor="w")
+        self.tree.column("category", width=170, anchor="w")
+        self.tree.column("item", width=240, anchor="w")
+        self.tree.column("tier", width=90, anchor="w")
+        self.tree.column("rarity", width=130, anchor="w")
+        self.tree.column("stype", width=80, anchor="w")
+        self.tree.column("sound", width=220, anchor="w")
         self.tree.column("volume", width=55, anchor="center")
-        self.tree.column("effect", width=140, anchor="w")
-        self.tree.column("minimap", width=150, anchor="w")
-        self.tree.column("context", width=440, anchor="w")
+        self.tree.column("effect", width=120, anchor="w")
+        self.tree.column("minimap", width=120, anchor="w")
+        self.tree.column("context", width=300, anchor="w")
 
         vsb = ttk.Scrollbar(tree_container, orient="vertical", command=self.tree.yview)
         hsb = ttk.Scrollbar(tree_container, orient="horizontal", command=self.tree.xview)
@@ -493,6 +530,9 @@ class FilterSoundEditor:
         })
 
         self.tree.bind("<<TreeviewSelect>>", self.display_context)
+        # Right-click context menu — built lazily on first invocation.
+        self._tree_menu = None
+        self.tree.bind("<Button-3>", self._on_tree_right_click)
 
         # Context panel
         context_panel = ctk.CTkFrame(body, corner_radius=12)
@@ -500,71 +540,139 @@ class FilterSoundEditor:
         self.context_label = ctk.CTkLabel(context_panel, text="Item Context: ", wraplength=1200, justify="left")
         self.context_label.pack(anchor="w", padx=10, pady=10)
 
-        # Options bar — a wrapping FlowBar so the buttons reflow onto more rows
-        # on a narrow window instead of being clipped off the edge.
-        options = FlowBar(tab_edit, corner_radius=12)
-        options.pack(fill="x", padx=6, pady=(6, 4))
+        # ----- Right-click hint banner -----
+        # The per-item action surface is now the right-click menu. The
+        # toolbar below holds GLOBAL / BULK actions only. A small banner
+        # tells users where the per-item options went.
+        hint_banner = ctk.CTkFrame(tab_edit, corner_radius=8, fg_color="transparent")
+        hint_banner.pack(fill="x", padx=10, pady=(0, 2))
+        self.hint_label = ctk.CTkLabel(
+            hint_banner,
+            text=("💡  Right-click any item for per-item actions  ·  "
+                  "Ctrl+A select all  ·  Ctrl+click multi-select"),
+            font=("Segoe UI", 10),
+            anchor="w",
+        )
+        self.hint_label.pack(side="left", padx=8, pady=4)
+        self.selection_counter = ctk.CTkLabel(
+            hint_banner, text="", font=("Segoe UI Semibold", 10), anchor="e",
+        )
+        self.selection_counter.pack(side="right", padx=8, pady=4)
+        self.tree.bind("<<TreeviewSelect>>", self._on_tree_select_with_count, add="+")
 
-        self.bulk_checkbox = ctk.CTkCheckBox(options, text="Bulk: all matching rows", variable=self.bulk_mode)
-        options.add(self.bulk_checkbox)
-        self.replace_button = ctk.CTkButton(options, text="🔁 Replace / Add Sound…", command=self.replace_sound, width=210)
-        options.add(self.replace_button)
-        self.volume_button = ctk.CTkButton(options, text="🔊 Change Volume…", command=self.change_volume, width=170)
-        options.add(self.volume_button)
-        self.preview_changed_button = ctk.CTkButton(options, text="▶ Play Last Change", command=self.preview_last_change, state="disabled", width=170)
-        options.add(self.preview_changed_button)
-        self.preview_selected_button = ctk.CTkButton(options, text="▶ Play Selected", command=self.preview_selected, width=150)
-        options.add(self.preview_selected_button)
-        self.stop_button = ctk.CTkButton(options, text="⏹ Stop", command=self.stop_preview, width=120)
-        options.add(self.stop_button)
+        # ----- Preview / playback toolbar -----
+        # Sound preview is its own row because it's the "live feedback" action.
+        preview_bar = FlowBar(tab_edit, corner_radius=12)
+        preview_bar.pack(fill="x", padx=6, pady=(4, 2))
+        preview_bar.add(ctk.CTkLabel(preview_bar, text="🔊 Preview",
+                                      font=("Segoe UI Semibold", 11)))
+        self.preview_selected_button = ctk.CTkButton(
+            preview_bar, text="▶ Play Selected",
+            command=self.preview_selected, width=140,
+        )
+        preview_bar.add(self.preview_selected_button)
+        self.preview_changed_button = ctk.CTkButton(
+            preview_bar, text="▶ Play Last Change",
+            command=self.preview_last_change, state="disabled", width=160,
+        )
+        preview_bar.add(self.preview_changed_button)
+        self.stop_button = ctk.CTkButton(
+            preview_bar, text="⏹ Stop", command=self.stop_preview, width=90,
+        )
+        preview_bar.add(self.stop_button)
+        # bulk_checkbox lives in this row too — it's a global mode toggle
+        # that affects the "Replace Sound" right-click action.
+        self.bulk_checkbox = ctk.CTkCheckBox(
+            preview_bar, text="Bulk-mode: match by sound across all rows",
+            variable=self.bulk_mode,
+        )
+        preview_bar.add(self.bulk_checkbox)
 
-        # Filtered-set bulk operations (acts on whatever the sidebar+search shows)
+        # ----- Bulk / health toolbar -----
+        # Operates on the currently visible (search + sidebar filtered) set.
         bulk_options = FlowBar(tab_edit, corner_radius=12)
-        bulk_options.pack(fill="x", padx=6, pady=4)
-        bulk_options.add(ctk.CTkLabel(bulk_options, text="On filtered set:", font=("Segoe UI", 11, "bold")))
+        bulk_options.pack(fill="x", padx=6, pady=2)
+        bulk_options.add(ctk.CTkLabel(
+            bulk_options, text="🗂 Bulk on visible",
+            font=("Segoe UI Semibold", 11),
+        ))
         self.bulk_replace_filtered_btn = ctk.CTkButton(
-            bulk_options, text="🔁 Replace Sound in Visible…",
-            command=self.replace_sound_in_filtered, width=220,
+            bulk_options, text="🔁 Sound",
+            command=self.replace_sound_in_filtered, width=110,
         )
         bulk_options.add(self.bulk_replace_filtered_btn)
         self.bulk_volume_filtered_btn = ctk.CTkButton(
-            bulk_options, text="🔊 Set Volume on Visible…",
-            command=self.set_volume_in_filtered, width=200,
+            bulk_options, text="🔊 Volume",
+            command=self.set_volume_in_filtered, width=110,
         )
         bulk_options.add(self.bulk_volume_filtered_btn)
         self.bulk_mute_filtered_btn = ctk.CTkButton(
-            bulk_options, text="🔇 Mute Visible", command=self.mute_filtered,
-            width=150, fg_color="#5b3a0c",
+            bulk_options, text="🔇 Mute", command=self.mute_filtered,
+            width=90, fg_color="#5b3a0c",
         )
         bulk_options.add(self.bulk_mute_filtered_btn)
         self.bulk_unmute_filtered_btn = ctk.CTkButton(
-            bulk_options, text="🔈 Un-mute Visible", command=self.unmute_filtered, width=170,
+            bulk_options, text="🔈 Un-mute", command=self.unmute_filtered, width=110,
         )
         bulk_options.add(self.bulk_unmute_filtered_btn)
+        # Health cluster — visually separated by a label.
+        bulk_options.add(ctk.CTkLabel(
+            bulk_options, text="    🩺 Health",
+            font=("Segoe UI Semibold", 11),
+        ))
         self.verify_sounds_btn = ctk.CTkButton(
-            bulk_options, text="🩺 Verify & Fix Sounds…",
-            command=self.verify_and_fix_sounds, width=210,
+            bulk_options, text="Verify & Fix",
+            command=self.verify_and_fix_sounds, width=130,
         )
         bulk_options.add(self.verify_sounds_btn)
         self.unique_sounds_btn = ctk.CTkButton(
-            bulk_options, text="🎲 Make Sounds Unique…",
-            command=self.make_sounds_unique, width=210,
+            bulk_options, text="🎲 Make Unique",
+            command=self.make_sounds_unique, width=140,
         )
         bulk_options.add(self.unique_sounds_btn)
 
-        # Color editing buttons (wrapping row)
+        # The big complex actions get their own row so they're prominent.
+        # Edit Colors opens a full editor; the rest are reachable via right-click
+        # and Tools menu but kept here for discoverability.
         color_options = FlowBar(tab_edit, corner_radius=12)
-        color_options.pack(fill="x", padx=6, pady=(4, 6))
-        color_options.add(ctk.CTkLabel(color_options, text="Color Tools:", font=("Segoe UI", 11, "bold")))
-        self.edit_colors_button = ctk.CTkButton(color_options, text="🎨 Edit Colors…", command=self.edit_colors, width=150)
+        color_options.pack(fill="x", padx=6, pady=(2, 6))
+        color_options.add(ctk.CTkLabel(
+            color_options, text="🎨 Selected item",
+            font=("Segoe UI Semibold", 11),
+        ))
+        self.edit_colors_button = ctk.CTkButton(
+            color_options, text="🎨 Edit Colors…", command=self.edit_colors, width=140,
+        )
         color_options.add(self.edit_colors_button)
-        self.copy_colors_button = ctk.CTkButton(color_options, text="🖌 Copy Colors", command=self.copy_colors, width=140)
-        color_options.add(self.copy_colors_button)
-        self.paste_colors_button = ctk.CTkButton(color_options, text="📋 Paste Colors", command=self.paste_colors, width=140, state="disabled")
-        color_options.add(self.paste_colors_button)
-        self.preview_item_button = ctk.CTkButton(color_options, text="👁 Preview Item", command=self.preview_item_colors, width=140)
+        self.replace_button = ctk.CTkButton(
+            color_options, text="🔁 Replace Sound…",
+            command=self.replace_sound, width=160,
+        )
+        color_options.add(self.replace_button)
+        self.volume_button = ctk.CTkButton(
+            color_options, text="🔊 Volume…", command=self.change_volume, width=120,
+        )
+        color_options.add(self.volume_button)
+        self.preview_item_button = ctk.CTkButton(
+            color_options, text="👁 Preview Item",
+            command=self.preview_item_colors, width=140,
+        )
         color_options.add(self.preview_item_button)
-        self.remove_colors_button = ctk.CTkButton(color_options, text="🗑 Remove Colors", command=self.remove_colors, width=150, fg_color="darkred")
+        # Less-used color clipboard buttons are reachable via right-click;
+        # keep direct buttons for keyboard-only / no-multi-select users.
+        self.copy_colors_button = ctk.CTkButton(
+            color_options, text="🖌 Copy", command=self.copy_colors, width=80,
+        )
+        color_options.add(self.copy_colors_button)
+        self.paste_colors_button = ctk.CTkButton(
+            color_options, text="📋 Paste",
+            command=self.paste_colors, width=80, state="disabled",
+        )
+        color_options.add(self.paste_colors_button)
+        self.remove_colors_button = ctk.CTkButton(
+            color_options, text="🗑 Remove", command=self.remove_colors,
+            width=100, fg_color="darkred",
+        )
         color_options.add(self.remove_colors_button)
 
         # ---------- Status bar with health indicator ----------
@@ -599,11 +707,14 @@ class FilterSoundEditor:
             tm.register_widget(btn, tm.ROLE_PRIMARY)
         for btn in (self.bulk_mute_filtered_btn, self.remove_colors_button):
             tm.register_widget(btn, tm.ROLE_DANGER)
-        for frame in (options, bulk_options, color_options, context_panel):
+        for frame in (preview_bar, bulk_options, color_options, context_panel,
+                       hint_banner):
             tm.register_widget(frame, tm.ROLE_PANEL_ALT)
         tm.register_widget(self.bulk_checkbox, tm.ROLE_CHECKBOX)
         tm.register_widget(self.context_label, tm.ROLE_TEXT)
         tm.register_widget(self.status, tm.ROLE_TEXT_MUTED)
+        tm.register_widget(self.hint_label, tm.ROLE_TEXT_MUTED)
+        tm.register_widget(self.selection_counter, tm.ROLE_TEXT)
         tm.register_widget(status_bar, tm.ROLE_PANEL_ALT)
 
         # ===== Merge tab (Smart Merge) =====
@@ -626,6 +737,30 @@ class FilterSoundEditor:
         self.root.bind("<Control-u>", lambda e: (self.make_sounds_unique(), "break"))
         self.root.bind("<F1>", lambda e: (self.show_about_dialog(), "break"))
         self.root.bind("<F5>", lambda e: (self._reload_current_filter(), "break"))
+        # Ctrl+A selects every row currently visible in the main item tree.
+        # Scope it to the tree so it doesn't fire while typing in the search box.
+        self.tree.bind("<Control-a>", self._select_all_visible)
+        self.tree.bind("<Control-A>", self._select_all_visible)
+
+    def _select_all_visible(self, _event=None):
+        """Ctrl+A on the main tree — select every currently visible row."""
+        rows = self.tree.get_children()
+        if rows:
+            self.tree.selection_set(rows)
+        return "break"
+
+    def _on_tree_select_with_count(self, _event=None):
+        """Keep the selection counter in the hint banner up to date."""
+        try:
+            n = len(self.tree.selection())
+        except Exception:
+            n = 0
+        if n == 0:
+            self.selection_counter.configure(text="")
+        elif n == 1:
+            self.selection_counter.configure(text="1 selected")
+        else:
+            self.selection_counter.configure(text=f"{n} selected")
 
     def _set_status(self, text):
         self.status.configure(text=text)
@@ -870,6 +1005,9 @@ class FilterSoundEditor:
         visuals_menu.add_separator()
         visuals_menu.add_command(label="Emphasize by Tier…", command=self.emphasize_by_tier)
         visuals_menu.add_command(label="Randomize Visuals…", command=self.randomize_visuals)
+        visuals_menu.add_separator()
+        visuals_menu.add_command(label="Add / Update Chance Orb Items…",
+                                  command=self.add_chance_orb_valuables)
         menubar.add_cascade(label="Visuals & Tiers", menu=visuals_menu)
 
         # ----- Filter Health ----- (check & inspect the filter itself)
@@ -891,6 +1029,9 @@ class FilterSoundEditor:
                               command=lambda: webbrowser.open("https://www.pathofexile.com/forum/view-thread/3683711"))
         help_menu.add_command(label="FilterBlade Editor (web)",
                               command=lambda: webbrowser.open("https://www.filterblade.xyz/?game=Poe2"))
+        help_menu.add_separator()
+        help_menu.add_command(label="Open Debug Log", command=self.open_debug_log)
+        help_menu.add_command(label="Open Log Folder", command=self.open_log_folder)
         help_menu.add_separator()
         help_menu.add_command(label=f"About {APP_NAME}", accelerator="F1", command=self.show_about_dialog)
         menubar.add_cascade(label="Help", menu=help_menu)
@@ -1034,15 +1175,17 @@ class FilterSoundEditor:
         if not path:
             return
 
+        log.info("load_filter: %s", path)
         try:
             self.filter_path = path
-            # Use new core.file_operations
             self.lines = load_filter_file(self.filter_path)
+            log.info("Read %d lines from %s", len(self.lines), path)
             self._snapshot_on_load(self.filter_path)
             self.file_label.configure(text=os.path.basename(self.filter_path))
             self._set_status(f"Loaded: {self.filter_path}")
             self.refresh_filter_data()
         except Exception as e:
+            log.exception("load_filter failed for %s", path)
             messagebox.showerror("Load Error", f"Failed to load filter:\n{e}")
             self._set_status(f"Error loading file")
             return
@@ -1055,11 +1198,13 @@ class FilterSoundEditor:
         if not self.filter_path:
             return
 
+        log.info("save_filter: %s (%d lines, backup=%s)",
+                 self.filter_path, len(self.lines), self.settings.create_backups)
         try:
-            # Use new core.file_operations (includes automatic backup)
             save_filter_file(self.filter_path, self.lines, create_backup=self.settings.create_backups, max_backups=self.settings.max_backups)
             self._set_status("Saved with automatic backup")
         except Exception as e:
+            log.exception("save_filter failed for %s", self.filter_path)
             messagebox.showerror("Save Error", f"Failed to save filter:\n{e}")
             return
 
@@ -1078,6 +1223,31 @@ class FilterSoundEditor:
         self.filtered_data.clear()
         for row in self.tree.get_children():
             self.tree.delete(row)
+
+        # Cache per-filter overrides for the duration of this parse so
+        # process_block can look up the effective tier per block without
+        # re-reading the sidecar on every call.
+        try:
+            from core.user_overrides import load_overrides
+            self._cached_overrides = load_overrides(self.filter_path)
+        except Exception:
+            self._cached_overrides = None
+
+        # Cache the curated chance-orb basetype set so the sidebar can show a
+        # CHANCE ORB ITEMS entry that matches across the whole loaded filter,
+        # even before the user injects the dedicated section.
+        try:
+            from features.chance_orb_section import (
+                load_config as _load_chance_cfg, default_bases_path as _chance_path,
+            )
+            cfg = _load_chance_cfg(_chance_path(_writable_app_dir()))
+            if cfg is None:
+                cfg = _load_chance_cfg(_chance_path(_bundled_resource_dir()))
+            self._cached_chance_bases_lower = (
+                {b.lower() for b in cfg.enabled_base_names()} if cfg else set()
+            )
+        except Exception:
+            self._cached_chance_bases_lower = set()
 
         current_block = []
         start_idx = 0
@@ -1138,7 +1308,10 @@ class FilterSoundEditor:
     def _parse_block_meta(self, block):
         """Parse block metadata."""
         rarity_lines = [l for l in block if l.startswith("Rarity")]
-        rarity = ", ".join(rarity_lines) if rarity_lines else "Rarity Unknown"
+        # POE2 currency / map / non-gear blocks usually have no Rarity line —
+        # they match by BaseType/Class. Showing "Rarity Unknown" was misleading
+        # (it implied missing data, not "this filter matches any rarity").
+        rarity = ", ".join(rarity_lines) if rarity_lines else "Any rarity"
 
         keys = (
             "Class", "BaseType", "ItemLevel", "DropLevel", "Sockets", "GemLevel", "HasInfluence",
@@ -1164,12 +1337,49 @@ class FilterSoundEditor:
         block_tier = tier_m.group(1) if tier_m else ""
         block_style = style_m.group(1) if style_m else ""
 
+        # Friendly item name from BaseType/Class/Rarity — the same helper the
+        # tier dialog uses. Lets the main tree's "Item" column say
+        # "Divine Orb [Currency]" instead of forcing the user to read the
+        # full Item Context string. Also computes the effective tier so the
+        # Tier column reflects any per-block override the user has saved,
+        # and captures the parsed basetypes for sidebar filters like
+        # CHANCE ORB ITEMS that match by base name across the whole filter.
+        from core.user_overrides import (
+            friendly_block_name, block_signature, parse_block,
+        )
+        from features.visual_emphasis import classify_block, ValueTier
+        try:
+            item_name = friendly_block_name(block)
+        except Exception:
+            item_name = ""
+        try:
+            parsed = parse_block(block)
+            basetypes_lower = {b.lower() for b in parsed.basetypes}
+        except Exception:
+            basetypes_lower = set()
+        try:
+            sig = block_signature(block)
+            base_tier = classify_block(block[0] if block else "", category)
+            effective_tier = base_tier
+            # `self._cached_overrides` is set by refresh_filter_data().
+            ov = getattr(self, "_cached_overrides", None)
+            if ov is not None:
+                block_ov = ov.block_overrides.get(sig)
+                if block_ov and block_ov.tier is not None:
+                    effective_tier = block_ov.tier
+            tier_label = effective_tier.name.title() if effective_tier != ValueTier.HIDDEN else "Hidden"
+        except Exception:
+            tier_label = ""
+
         extra = {
             "category": category,
             "subcategory": subcategory,
             "block_type": block_type,
             "block_tier": block_tier,
             "block_style": block_style,
+            "item": item_name,
+            "tier_label": tier_label,
+            "basetypes_lower": basetypes_lower,
         }
 
         found_any = False
@@ -1272,6 +1482,8 @@ class FilterSoundEditor:
             tag = "oddrow" if idx % 2 else "evenrow"
             self.tree.insert("", "end", values=(
                 entry.get("category", ""),
+                entry.get("item", "") or "(no criteria)",
+                entry.get("tier_label", ""),
                 entry["rarity"],
                 entry["stype"],
                 entry["sound"],
@@ -1280,6 +1492,61 @@ class FilterSoundEditor:
                 minimap_short,
                 entry["context"]
             ), tags=(tag,))
+        # If a sort was active before populate_tree ran (e.g. after a refresh),
+        # re-apply it so the user's chosen order persists across edits.
+        if self._sort_col:
+            self._sort_tree_by_column(self._sort_col, _preserve_direction=True)
+
+    # -------- Column-header sort -------- #
+
+    # Stable rank for the Tier column so click-sort puts MYTHIC first not
+    # alphabetically. Hidden lands at the bottom regardless of direction.
+    _TIER_SORT_RANK = {
+        "Mythic": 0, "Top": 1, "High": 2, "Mid": 3, "Low": 4, "Junk": 5, "Hidden": 6,
+        "": 7,
+    }
+
+    def _sort_key_for_column(self, col):
+        """Return a key function suitable for the values in `col`."""
+        if col == "volume":
+            def _vol_key(v):
+                try:
+                    return (0, int(v))
+                except (TypeError, ValueError):
+                    # Empty / unsortable cells sort last either direction.
+                    return (1, 0)
+            return _vol_key
+        if col == "tier":
+            return lambda v: self._TIER_SORT_RANK.get(str(v), 99)
+        # Default: case-insensitive string sort, with empties sinking last.
+        def _str_key(v):
+            s = "" if v is None else str(v)
+            return (1, "") if not s.strip() else (0, s.lower())
+        return _str_key
+
+    def _sort_tree_by_column(self, col, _preserve_direction=False):
+        """Reorder tree rows by `col`. Toggle direction on repeated clicks."""
+        if not _preserve_direction:
+            if self._sort_col == col:
+                self._sort_reverse = not self._sort_reverse
+            else:
+                self._sort_col = col
+                self._sort_reverse = False
+
+        key_fn = self._sort_key_for_column(col)
+        rows = [(self.tree.set(iid, col), iid) for iid in self.tree.get_children("")]
+        rows.sort(key=lambda pair: key_fn(pair[0]), reverse=self._sort_reverse)
+        for i, (_, iid) in enumerate(rows):
+            self.tree.move(iid, "", i)
+            # Re-tag rows so zebra stripes stay alternating after the reorder.
+            self.tree.item(iid, tags=("oddrow" if i % 2 else "evenrow",))
+
+        # Update the heading text with the active ▲/▼ indicator.
+        arrow = " ▼" if self._sort_reverse else " ▲"
+        for c in self._tree_columns:
+            base = self._tree_heading_text[c]
+            text = base + (arrow if c == col else "")
+            self.tree.heading(c, text=text)
 
     # ===== Smart curated groups (logical supersets of sections) =====
     SMART_GROUPS = [
@@ -1387,6 +1654,33 @@ class FilterSoundEditor:
                                            text=f"#  Disabled (commented)   ({len(commented)})",
                                            tags=("smart", "muted"))
             self._cat_filters[cm_iid] = ("commented", lambda e: bool(e.get("commented")))
+
+        # ---------- Chase Targets (built-in, basetype-driven) ----------
+        # These appear regardless of whether the user has injected the matching
+        # filter section. The predicate matches any block whose BaseType list
+        # intersects the curated chance-target set.
+        chance_bases_lower = getattr(self, "_cached_chance_bases_lower", set())
+        if chance_bases_lower:
+            chance_entries = [
+                e for e in self.filter_data
+                if e.get("basetypes_lower") and (e["basetypes_lower"] & chance_bases_lower)
+            ]
+            chase_header = self.cat_tree.insert(
+                "", "end", text="Chase Targets", tags=("group_header",), open=True,
+            )
+            self._cat_filters[chase_header] = ("noop", None)
+            chance_w, chance_t = self._count_pair(chance_entries)
+            chance_iid = self.cat_tree.insert(
+                chase_header, "end",
+                text=f"💎 CHANCE ORB ITEMS   ({chance_w}/{chance_t})",
+                tags=("smart",),
+            )
+            self._cat_filters[chance_iid] = (
+                "chance_orb",
+                lambda e, cb=chance_bases_lower: bool(
+                    e.get("basetypes_lower") and (e["basetypes_lower"] & cb)
+                ),
+            )
 
         # ---------- Smart groups ----------
         smart_header = self.cat_tree.insert("", "end", text="Smart Groups", tags=("group_header",), open=True)
@@ -1522,9 +1816,21 @@ class FilterSoundEditor:
         selected = self.tree.focus()
         if not selected:
             return None
-        values = self.tree.item(selected)["values"]
-        category, rarity, stype, sound, volume, effect_short, minimap_short, context = values
+        return self._entry_for_iid(selected)
 
+    def _entry_for_iid(self, iid):
+        """Look up the filter_data entry for a treeview row iid.
+
+        Column order in the tree: category, item, tier, rarity, stype,
+        sound, volume, effect, minimap, context (10 columns).
+        """
+        try:
+            values = self.tree.item(iid)["values"]
+        except Exception:
+            return None
+        if not values or len(values) < 10:
+            return None
+        category, _item, _tier, rarity, stype, sound, volume, effect_short, minimap_short, context = values
         for e in self.filter_data:
             if (
                 e.get("category", "") == category and
@@ -1537,13 +1843,382 @@ class FilterSoundEditor:
                 return e
         return None
 
+    def _get_selected_entries(self):
+        """All currently selected rows mapped to filter_data entries.
+
+        Falls back to the focused row if nothing is selected (matches what
+        users expect from right-clicking a single unselected row).
+        """
+        iids = self.tree.selection()
+        if not iids:
+            focus = self.tree.focus()
+            iids = (focus,) if focus else ()
+        entries = []
+        seen_starts = set()
+        for iid in iids:
+            e = self._entry_for_iid(iid)
+            if not e:
+                continue
+            # De-dupe by block start_idx so multi-row blocks don't get touched twice.
+            if e["start_idx"] in seen_starts:
+                continue
+            seen_starts.add(e["start_idx"])
+            entries.append(e)
+        return entries
+
+    # -------- Right-click context menu -------- #
+
+    def _on_tree_right_click(self, event):
+        # Click selects the row under the cursor unless it's already in the
+        # multi-selection — that way Ctrl+click multi-select isn't broken by
+        # a right-click on one row.
+        row = self.tree.identify_row(event.y)
+        if row and row not in self.tree.selection():
+            self.tree.selection_set(row)
+            self.tree.focus(row)
+        self._show_tree_context_menu(event.x_root, event.y_root)
+
+    def _show_tree_context_menu(self, x_root, y_root):
+        if self._tree_menu is None:
+            self._tree_menu = self._build_tree_context_menu()
+        try:
+            self._tree_menu.tk_popup(x_root, y_root)
+        finally:
+            self._tree_menu.grab_release()
+
+    def _build_tree_context_menu(self):
+        from features.visual_emphasis import ValueTier
+        menu = tk.Menu(self.tree, tearoff=False)
+        menu.add_command(label="Replace / Add Sound…",
+                         command=self._ctx_replace_sound)
+        menu.add_command(label="Change Volume…",
+                         command=self._ctx_change_volume)
+        menu.add_command(label="Mute (comment out sound)",
+                         command=lambda: self._ctx_set_mute(True))
+        menu.add_command(label="Un-mute",
+                         command=lambda: self._ctx_set_mute(False))
+        menu.add_command(label="Preview Item",
+                         command=self.preview_selected)
+        menu.add_separator()
+        menu.add_command(label="Edit Colors…", command=self.edit_colors)
+        menu.add_command(label="Copy Colors", command=self.copy_colors)
+        menu.add_command(label="Paste Colors", command=self._ctx_paste_colors)
+        menu.add_command(label="Remove Colors", command=self._ctx_remove_colors)
+        menu.add_separator()
+
+        tier_menu = tk.Menu(menu, tearoff=False)
+        tier_specs = [
+            (ValueTier.MYTHIC, "Mythic"),
+            (ValueTier.TOP, "Top"),
+            (ValueTier.HIGH, "High"),
+            (ValueTier.MID, "Mid"),
+            (ValueTier.LOW, "Low"),
+            (ValueTier.JUNK, "Junk"),
+        ]
+        for tier, label in tier_specs:
+            tier_menu.add_command(
+                label=f"Move to {label}",
+                command=lambda t=tier: self._ctx_move_to_tier(t),
+            )
+        tier_menu.add_separator()
+        tier_menu.add_command(label="Reset tier override",
+                              command=lambda: self._ctx_move_to_tier(None))
+        menu.add_cascade(label="Move to Tier ▶", menu=tier_menu)
+        return menu
+
+    # -------- Context-menu action handlers (selection-aware wrappers) -------- #
+
+    def _ctx_replace_sound(self):
+        # Single-select: reuse the focused-row flow (handles the bulk_mode toggle).
+        # Multi-select: ask for one file, apply to every selected block.
+        entries = self._get_selected_entries()
+        if len(entries) <= 1:
+            self.replace_sound()
+            return
+
+        new_sound_path = filedialog.askopenfilename(
+            filetypes=[("Audio/Video Files",
+                        "*.wav *.ogg *.mp3 *.aac *.flac *.m4a *.wmv *.mp4 *.mkv *.webm *.opus")],
+        )
+        if not new_sound_path:
+            return
+        new_filename = os.path.basename(new_sound_path)
+        dest_dir = os.path.dirname(self.filter_path)
+        try:
+            copy_sound_file(new_sound_path, dest_dir)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to copy sound file: {e}")
+            return
+
+        touched = 0
+        for entry in entries:
+            if entry["stype"] == "None":
+                self._insert_custom_sound(entry["start_idx"], new_filename, volume=300)
+            else:
+                self._rewrite_sound_in_block(entry, new_filename)
+            touched += 1
+
+        self.save_filter()
+        self._set_status(f"Applied '{new_filename}' to {touched} selected block(s)")
+        self.refresh_filter_data()
+
+    def _rewrite_sound_in_block(self, entry, new_filename):
+        def updater(line):
+            raw = line.rstrip("\n")
+            stripped = raw.strip()
+            leading = raw[:len(raw) - len(raw.lstrip(" \t"))]
+            m_c = SOUND_RE_CUSTOM.match(stripped)
+            m_p = SOUND_RE_PLAY.match(stripped)
+            if entry["stype"] == "Custom" and m_c:
+                comment_prefix, kw, filename, vol = m_c.groups()
+                if filename == entry["sound"]:
+                    vol_part = f" {vol}" if vol else ""
+                    prefix = (comment_prefix or "") + kw
+                    return f'{leading}{prefix} "{new_filename}"{vol_part}\n'
+            elif entry["stype"] == "Play" and m_p:
+                comment_prefix, kw, sid, vol = m_p.groups()
+                if sid == str(entry["sound"]):
+                    vol_part = f" {vol}" if vol else ""
+                    prefix = (comment_prefix or "")
+                    return f'{leading}{prefix}CustomAlertSound "{new_filename}"{vol_part}\n'
+            return None
+        self._update_block_lines(entry["start_idx"], updater)
+
+    def _ctx_change_volume(self):
+        entries = [e for e in self._get_selected_entries() if e["stype"] != "None"]
+        if not entries:
+            messagebox.showinfo("No sound", "None of the selected rows have a sound.")
+            return
+        new_vol = simpledialog.askinteger(
+            "Volume",
+            f"Set volume on {len(entries)} selected sound row(s) (0-300):",
+            minvalue=0, maxvalue=300, parent=self.root,
+        )
+        if new_vol is None:
+            return
+        for entry in entries:
+            self._set_block_volume(entry, new_vol)
+        self.save_filter()
+        self._set_status(f"Volume set to {new_vol} on {len(entries)} block(s)")
+        self.refresh_filter_data()
+
+    def _set_block_volume(self, entry, new_vol):
+        def updater(line):
+            raw = line.rstrip("\n")
+            stripped = raw.strip()
+            leading = raw[:len(raw) - len(raw.lstrip(" \t"))]
+            m_c = SOUND_RE_CUSTOM.match(stripped)
+            m_p = SOUND_RE_PLAY.match(stripped)
+            if entry["stype"] == "Custom" and m_c:
+                comment_prefix, kw, filename, _vol = m_c.groups()
+                if filename == entry["sound"]:
+                    prefix = (comment_prefix or "") + kw
+                    return f'{leading}{prefix} "{filename}" {new_vol}\n'
+            elif entry["stype"] == "Play" and m_p:
+                comment_prefix, kw, sid, _vol = m_p.groups()
+                if sid == str(entry["sound"]):
+                    prefix = (comment_prefix or "") + kw
+                    return f'{leading}{prefix} {sid} {new_vol}\n'
+            return None
+        self._update_block_lines(entry["start_idx"], updater)
+
+    def _ctx_set_mute(self, mute: bool):
+        entries = [e for e in self._get_selected_entries() if e["stype"] != "None"]
+        if not entries:
+            messagebox.showinfo("Nothing to (un)mute",
+                                "Select at least one row that has a sound.")
+            return
+        eligible = [e for e in entries
+                    if (mute and not e.get("commented"))
+                    or (not mute and e.get("commented"))]
+        if not eligible:
+            messagebox.showinfo("Nothing to change",
+                                f"All selected rows are already {'muted' if mute else 'un-muted'}.")
+            return
+        for entry in eligible:
+            self._toggle_block_mute(entry, mute)
+        self.save_filter()
+        verb = "Muted" if mute else "Un-muted"
+        self._set_status(f"{verb} {len(eligible)} block(s)")
+        self.refresh_filter_data()
+
+    def _toggle_block_mute(self, entry, mute: bool):
+        def updater(line):
+            raw = line.rstrip("\n")
+            stripped = raw.strip()
+            leading = raw[:len(raw) - len(raw.lstrip(" \t"))]
+            m_c = SOUND_RE_CUSTOM.match(stripped)
+            m_p = SOUND_RE_PLAY.match(stripped)
+            if entry["stype"] == "Custom" and m_c:
+                comment_prefix, kw, filename, vol = m_c.groups()
+                if filename != entry["sound"]:
+                    return None
+                if mute and not comment_prefix:
+                    return f'{leading}# {kw} "{filename}"{(" " + vol) if vol else ""}\n'
+                if not mute and comment_prefix:
+                    return f'{leading}{kw} "{filename}"{(" " + vol) if vol else ""}\n'
+            elif entry["stype"] == "Play" and m_p:
+                comment_prefix, kw, sid, vol = m_p.groups()
+                if sid != str(entry["sound"]):
+                    return None
+                if mute and not comment_prefix:
+                    return f'{leading}# {kw} {sid}{(" " + vol) if vol else ""}\n'
+                if not mute and comment_prefix:
+                    return f'{leading}{kw} {sid}{(" " + vol) if vol else ""}\n'
+            return None
+        self._update_block_lines(entry["start_idx"], updater)
+
+    def _ctx_paste_colors(self):
+        entries = self._get_selected_entries()
+        if not entries:
+            return
+        if len(entries) <= 1:
+            self.paste_colors()
+            return
+        if not self.color_clipboard.has_colors():
+            messagebox.showinfo("Clipboard empty",
+                                "Copy colors from a single block first.")
+            return
+        # Re-parse once, then paste to each matching block. paste_to_block
+        # returns updated lines so we feed the result back in.
+        try:
+            blocks = self.filter_parser.parse_file(self.lines)
+            blocks_by_start = {b.start_idx: b for b in blocks}
+            touched = 0
+            for entry in entries:
+                target = blocks_by_start.get(entry["start_idx"])
+                if target is None:
+                    continue
+                self.lines = self.color_clipboard.paste_to_block(target, self.lines)
+                touched += 1
+                # Re-parse since line counts may shift if colors were inserted.
+                blocks = self.filter_parser.parse_file(self.lines)
+                blocks_by_start = {b.start_idx: b for b in blocks}
+        except Exception as e:
+            log.exception("multi paste_colors failed")
+            messagebox.showerror("Paste error", str(e))
+            return
+        if touched:
+            self.save_filter()
+            self.refresh_filter_data()
+            self._set_status(f"Pasted colors to {touched} block(s)")
+
+    def _ctx_remove_colors(self):
+        entries = self._get_selected_entries()
+        if not entries:
+            return
+        if len(entries) <= 1:
+            self.remove_colors()
+            return
+        if not messagebox.askyesno(
+            "Remove colors",
+            f"Remove color lines from {len(entries)} selected block(s)?",
+        ):
+            return
+        touched = 0
+        for entry in entries:
+            if self._strip_color_lines_from_block(entry["start_idx"]):
+                touched += 1
+        if touched:
+            self.save_filter()
+            self.refresh_filter_data()
+            self._set_status(f"Removed colors from {touched} block(s)")
+
+    def _strip_color_lines_from_block(self, start_idx):
+        b_start, b_end = self._block_bounds(start_idx)
+        new_lines = []
+        removed = False
+        color_re = re.compile(
+            r"^\s*(SetTextColor|SetBorderColor|SetBackgroundColor)\b",
+            re.IGNORECASE,
+        )
+        for i, line in enumerate(self.lines):
+            if b_start < i < b_end and color_re.match(line):
+                removed = True
+                continue
+            new_lines.append(line)
+        if removed:
+            self.lines = new_lines
+        return removed
+
+    def _ctx_move_to_tier(self, dest_tier):
+        """Right-click → Move to Tier: save the override AND rewrite the
+        block's styling lines to match the tier preset immediately."""
+        entries = self._get_selected_entries()
+        if not entries:
+            return
+        from features.visual_emphasis import (
+            ValueTier, EMPHASIS_PRESETS, apply_style_to_block,
+            load_visual_presets, default_visual_presets_path,
+        )
+        from core.user_overrides import (
+            UserOverrides, BlockOverride, block_signature,
+            load_overrides, save_overrides,
+        )
+
+        # Load the user's customized presets + overrides for THIS filter.
+        app_dir = _writable_app_dir()
+        presets, _palettes = load_visual_presets(default_visual_presets_path(app_dir))
+        overrides = load_overrides(self.filter_path)
+
+        # Apply each block in reverse start_idx order so inserts in earlier
+        # blocks don't shift later indices.
+        entries = sorted(entries, key=lambda e: e["start_idx"], reverse=True)
+        touched_blocks = 0
+        for entry in entries:
+            start_idx = entry["start_idx"]
+            b_start, b_end = self._block_bounds(start_idx)
+            block_lines = self.lines[b_start:b_end]
+            sig = block_signature(block_lines)
+
+            # Update the override record.
+            existing = overrides.block_overrides.get(sig)
+            if dest_tier is None:
+                # Reset: drop the tier override; keep any custom style.
+                if existing and existing.style is None:
+                    del overrides.block_overrides[sig]
+                elif existing:
+                    existing.tier = None
+            else:
+                if existing:
+                    existing.tier = dest_tier
+                else:
+                    overrides.block_overrides[sig] = BlockOverride(tier=dest_tier)
+
+            # Rewrite the block's styling lines to match the destination tier.
+            if dest_tier is not None:
+                style = overrides.tier_presets.get(dest_tier) or presets.get(dest_tier)
+                if style is not None:
+                    new_block = apply_style_to_block(block_lines, style)
+                    self.lines[b_start:b_end] = new_block
+                    touched_blocks += 1
+
+        save_overrides(self.filter_path, overrides)
+        if touched_blocks:
+            self.save_filter()
+            self.refresh_filter_data()
+            label = "(reset)" if dest_tier is None else dest_tier.name
+            self._set_status(f"Moved {touched_blocks} block(s) → {label}")
+        else:
+            self._set_status("Override updated (no styling rewrite needed)")
+
     def display_context(self, event):
         selected = self.tree.focus()
-        if selected:
-            values = self.tree.item(selected)["values"]
-            category = values[0]
-            context = values[7]
-            self.context_label.configure(text=f"[{category}]   {context}")
+        if not selected:
+            return
+        values = self.tree.item(selected)["values"]
+        if len(values) < 10:
+            return
+        # Column order: category, item, tier, rarity, stype, sound, volume,
+        # effect, minimap, context. Indices match the tree definition in setup_gui.
+        category = values[0]
+        item = values[1]
+        tier = values[2]
+        context = values[9]
+        tier_part = f"  ·  Tier: {tier}" if tier else ""
+        self.context_label.configure(
+            text=f"[{category}]  ·  {item}{tier_part}  ·  {context}"
+        )
 
     # -------- Replace / Add / Volume ops (using core.file_operations for file copying) ------- #
     def _update_block_lines(self, start_idx, updater):
@@ -2508,14 +3183,16 @@ class FilterSoundEditor:
         if not path or not os.path.isfile(path):
             return
         try:
-            make_backup(
+            result = make_backup(
                 path,
                 max_keep=self.settings.max_backups,
                 label="load",
                 skip_if_identical=True,
             )
+            if result:
+                log.info("On-load snapshot: %s", os.path.basename(result))
         except Exception as e:
-            # Snapshot failure should never block loading — log to status only.
+            log.exception("On-load backup failed for %s", path)
             self._set_status(f"On-load backup skipped: {e}")
 
     # ============================================================
@@ -2530,11 +3207,136 @@ class FilterSoundEditor:
 
     def emphasize_by_tier(self):
         """Tools menu entry — open Visual Tools on the Emphasize tab."""
+        log.info("Emphasize by Tier requested")
         open_visual_tools(self, start_tab="emphasize")
 
     def randomize_visuals(self):
         """Tools menu entry — open Visual Tools on the Randomize tab."""
+        log.info("Randomize Visuals requested")
         open_visual_tools(self, start_tab="randomize")
+
+    def add_chance_orb_valuables(self):
+        """Insert or refresh the 'Chance Orb Items' section in the filter.
+
+        The bases live in a user-editable JSON so the meta can shift without
+        a code change. The section is wrapped in sentinel comments so re-runs
+        replace the existing section instead of duplicating it.
+
+        (Method name kept as `add_chance_orb_valuables` for backward compat
+        with anyone who scripted against it; section_title in the JSON is
+        the source of truth for what shows up in the filter.)
+        """
+        if not self.filter_path or not self.lines:
+            messagebox.showinfo("No filter", "Load a filter file first.")
+            return
+        from features.chance_orb_section import (
+            load_config, upsert_section, default_bases_path,
+        )
+
+        # Where the JSON lives — exe folder in a frozen build, repo root in source.
+        app_dir = _writable_app_dir()
+        bases_path = default_bases_path(app_dir)
+
+        cfg = load_config(bases_path)
+        if cfg is None:
+            # Fall back to the bundled defaults in the frozen build.
+            cfg = load_config(default_bases_path(_bundled_resource_dir()))
+        if cfg is None:
+            messagebox.showerror(
+                "No bases file",
+                f"Could not load:\n  {bases_path}\n\n"
+                "The bundled defaults are also missing. Reinstall or restore "
+                "the data/ folder.",
+            )
+            return
+
+        enabled = cfg.enabled_base_names()
+        if not enabled:
+            messagebox.showinfo(
+                "No bases enabled",
+                f"Every entry in:\n  {bases_path}\n\n"
+                "is disabled. Edit the file to mark at least one base as enabled.",
+            )
+            return
+
+        preview = ", ".join(enabled[:6]) + (" …" if len(enabled) > 6 else "")
+        if not messagebox.askyesno(
+            f"Add / Update {cfg.section_title}",
+            f"Inject the '{cfg.section_title}' section into:\n"
+            f"  {os.path.basename(self.filter_path)}\n\n"
+            f"Bases ({len(enabled)}): {preview}\n\n"
+            "Existing chance-orb section (if any) is replaced — no duplicates. "
+            "A backup is saved automatically. Continue?",
+        ):
+            return
+
+        new_lines, n, kind = upsert_section(self.lines, cfg, position="top")
+        self.lines = new_lines
+        try:
+            save_filter_file(
+                self.filter_path, self.lines,
+                create_backup=self.settings.create_backups,
+                max_backups=self.settings.max_backups,
+            )
+        except Exception as e:
+            log.exception("Chance Orb section save failed")
+            messagebox.showerror("Save error", str(e))
+            return
+
+        self.refresh_filter_data()
+        verb = "Inserted" if kind == 1 else "Updated"
+        self._set_status(f"{verb} '{cfg.section_title}' ({n} bases)")
+        log.info("Chance Orb section %s with %d bases", verb.lower(), n)
+
+        if messagebox.askyesno(
+            "Done",
+            f"{verb} the section ({n} base(s)).\n\n"
+            "Want to open the bases file now to add or remove entries?",
+        ):
+            self._open_chance_bases_file(bases_path)
+
+    def _open_chance_bases_file(self, path: str):
+        if not os.path.isfile(path):
+            messagebox.showinfo("Not found", f"Expected at:\n  {path}")
+            return
+        try:
+            if sys.platform == "win32":
+                os.startfile(path)  # noqa: SIM115
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as e:
+            log.exception("Open chance bases failed")
+            messagebox.showerror("Open failed", str(e))
+
+    def open_debug_log(self):
+        """Open the rolling debug log file in the user's default text editor."""
+        path = get_log_path()
+        log.info("User opened debug log")
+        if not os.path.isfile(path):
+            messagebox.showinfo(
+                "Debug log",
+                f"No log file yet:\n  {path}\n\n"
+                "It'll appear once anything runs that writes to the log.",
+            )
+            return
+        try:
+            if sys.platform == "win32":
+                os.startfile(path)  # noqa: SIM115
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", path])
+            else:
+                subprocess.Popen(["xdg-open", path])
+        except Exception as e:
+            log.exception("open_debug_log failed")
+            messagebox.showerror("Open failed", str(e))
+
+    def open_log_folder(self):
+        """Reveal the user-config folder (settings.json + the debug log)."""
+        folder = os.path.dirname(get_log_path())
+        log.info("User opened log folder: %s", folder)
+        self._open_folder(folder)
 
     def open_economy_tier_visuals(self, start_mode=None):
         """Open the Economy Tier Visual Preset dialog.
@@ -2621,11 +3423,18 @@ class FilterSoundEditor:
         we don't pop a dialog just to say "all good". The status bar reports it.
         Manual invocations always show a result.
         """
-        app_dir = os.path.dirname(os.path.abspath(__file__))
+        from core.user_overrides import load_overrides  # local: avoid bootstrap order issues
+
+        app_dir = _writable_app_dir()
         rules_path = default_rules_path(app_dir)
         engine = MigrationRulesEngine.load(rules_path)
-        checker = FilterCompatibilityChecker(engine)
+        overrides = load_overrides(self.filter_path)
+        checker = FilterCompatibilityChecker(engine, overrides=overrides)
         report = checker.check(self.lines)
+        log.info("Compatibility check: %d issue(s), %d auto-fixable, %d conflicts",
+                 len(report.issues),
+                 report.auto_fixable_count,
+                 sum(1 for i in report.issues if i.has_user_override))
 
         if report.is_clean:
             msg = "Compatibility: ✓ no issues found."
@@ -2639,6 +3448,7 @@ class FilterSoundEditor:
             return
 
         new_lines, applied = show_compatibility_dialog(self, self.lines, report, checker)
+        log.info("Compatibility user applied %d fix(es)", applied)
         if applied <= 0:
             self._set_status(
                 f"Compatibility: {len(report.issues)} issue(s) — none applied."
@@ -3764,12 +4574,25 @@ class FilterSoundEditor:
 
 
 if __name__ == '__main__':
-    root = ctk.CTk()
-    # Apply the chosen icon to the root window too (some platforms set the taskbar icon from this).
+    log_path = init_logging()
+    log.info("Booting %s v%s", APP_NAME, APP_VERSION)
+    log.info("Debug log: %s", log_path)
     try:
-        if APP_ICON_PATH:
-            root.iconbitmap(APP_ICON_PATH)
+        root = ctk.CTk()
+        try:
+            if APP_ICON_PATH:
+                root.iconbitmap(APP_ICON_PATH)
+        except Exception:
+            log.exception("Failed to set window icon")
+        app = FilterSoundEditor(root)
+        try:
+            root.mainloop()
+        finally:
+            log.info("Mainloop exited")
     except Exception:
-        pass
-    app = FilterSoundEditor(root)
-    root.mainloop()
+        # init_logging() already installed sys.excepthook; this is the
+        # belt-and-braces path so a crash before mainloop still gets recorded.
+        log.exception("Fatal error during app boot")
+        raise
+    finally:
+        logging_shutdown()

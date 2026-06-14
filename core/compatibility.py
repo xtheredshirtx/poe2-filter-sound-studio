@@ -16,10 +16,13 @@ without touching Python — just add a new rule and reload the filter.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Dict, Any
+
+log = logging.getLogger(__name__)
 
 
 # Block headers that open a new Show/Hide region.
@@ -46,8 +49,12 @@ KNOWN_CONDITIONS = {
     "ArchnemesisMod", "HasSearingExarchImplicit", "HasEaterOfWorldsImplicit",
     "TransfiguredGem", "HasCruciblePassiveTree",
     "Reward",
-    # POE2-specific
+    # POE2-specific (added across 0.1–0.5 patches)
     "WaystoneTier", "HasImplicitMod", "Rune",
+    "TwiceCorrupted",         # Recombinator / twice-corrupted system
+    "UnidentifiedItemTier",   # New tier system for unidentified rares
+    "MemoryStrands",          # Map device / memory strand condition
+    "CharmTier", "RuneTier",  # Charm and rune tier filtering
 }
 
 # Actions/styling valid inside a Show/Hide block.
@@ -100,6 +107,11 @@ class CompatibilityIssue:
     auto_fixable: bool = False
     new_line_text: Optional[str] = None   # what we'd replace line_text with
     rule_id: Optional[str] = None         # which migration rule produced this, if any
+    # True when this line lives inside a block the user has customized via the
+    # tier detail dialog. The UI flags these so the user notices a fix would
+    # clobber their tweaks.
+    has_user_override: bool = False
+    override_summary: str = ""
 
     @property
     def display_line(self) -> str:
@@ -201,8 +213,7 @@ class MigrationRulesEngine:
             with open(rules_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except (OSError, json.JSONDecodeError) as e:
-            # Corrupt rules file shouldn't break the load — surface via empty engine.
-            print(f"[compatibility] Could not read rules from {rules_file}: {e}")
+            log.warning("Could not read rules from %s: %s", rules_file, e)
             return cls(rules=[], rules_file=rules_file)
 
         raw_rules = data.get("rules", []) if isinstance(data, dict) else []
@@ -211,7 +222,7 @@ class MigrationRulesEngine:
             try:
                 rules.append(MigrationRule.from_dict(r))
             except Exception as e:
-                print(f"[compatibility] Skipping bad rule {r!r}: {e}")
+                log.warning("Skipping bad rule %r: %s", r, e)
         return cls(rules=rules, rules_file=rules_file)
 
     def apply_to_line(self, stripped: str, raw: str) -> Optional[CompatibilityIssue]:
@@ -283,13 +294,21 @@ class MigrationRulesEngine:
 class FilterCompatibilityChecker:
     """Runs validation + migration rules over a filter's lines."""
 
-    def __init__(self, engine: Optional[MigrationRulesEngine] = None):
+    def __init__(self, engine: Optional[MigrationRulesEngine] = None,
+                 overrides=None):
         self.engine = engine or MigrationRulesEngine()
         self.allowed_commands = KNOWN_COMMANDS | self.engine.extra_allowed
+        # Per-filter user overrides. When set, the checker tags any issue
+        # whose line lives in a customized block, so the UI can warn before
+        # auto-applying a fix that would overwrite the user's tweaks.
+        self.overrides = overrides
 
     def check(self, lines: List[str]) -> CompatibilityReport:
         report = CompatibilityReport(rules_file=self.engine.rules_file)
         in_block = False
+
+        # Pre-compute line ranges for blocks the user has customized.
+        override_ranges = self._compute_override_ranges(lines)
 
         for idx, raw in enumerate(lines):
             stripped_full = raw.strip()
@@ -318,13 +337,14 @@ class FilterCompatibilityChecker:
             issue = self.engine.apply_to_line(stripped, raw)
             if issue is not None:
                 issue.line_no = idx
+                self._tag_override(issue, override_ranges)
                 report.issues.append(issue)
                 report.rules_applied += 1
                 continue
 
             # 2) Unknown command outside any block? Probably a stray edit.
             if first_token not in self.allowed_commands:
-                report.issues.append(CompatibilityIssue(
+                issue = CompatibilityIssue(
                     line_no=idx,
                     line_text=raw,
                     kind=KIND_UNKNOWN,
@@ -334,7 +354,9 @@ class FilterCompatibilityChecker:
                         "in migration_rules.json so it stops being flagged."
                     ),
                     auto_fixable=False,
-                ))
+                )
+                self._tag_override(issue, override_ranges)
+                report.issues.append(issue)
                 continue
 
             # 3) Orphan action — recognized command but not inside a Show/Hide.
@@ -354,9 +376,51 @@ class FilterCompatibilityChecker:
             # 4) Value-level validation for commands we understand deeply.
             val_issue = self._validate_values(idx, raw, stripped)
             if val_issue:
+                self._tag_override(val_issue, override_ranges)
                 report.issues.append(val_issue)
 
         return report
+
+    def _compute_override_ranges(self, lines: List[str]):
+        """Return a list of (start_idx, end_idx, summary) tuples for blocks
+        the user has customized. End is exclusive."""
+        if self.overrides is None or not self.overrides.has_any():
+            return []
+        # Lazy import to avoid the cycle.
+        from core.user_overrides import block_signature
+        try:
+            from features.visual_emphasis import (
+                iter_blocks as _iter_blocks, classify_block as _classify,
+            )
+        except ImportError:
+            return []
+
+        ranges = []
+        for start, end, header, section, block in _iter_blocks(lines):
+            sig = block_signature(block)
+            block_ov = self.overrides.block_overrides.get(sig)
+            base_tier = _classify(header, section)
+            effective_tier = (block_ov.tier if block_ov and block_ov.tier else base_tier)
+            tier_ov = self.overrides.tier_presets.get(effective_tier)
+
+            summary_parts = []
+            if block_ov and block_ov.tier:
+                summary_parts.append(f"tier→{block_ov.tier.name}")
+            if block_ov and block_ov.style:
+                summary_parts.append("custom block style")
+            if tier_ov:
+                summary_parts.append(f"{effective_tier.name} tier preset")
+            if summary_parts:
+                ranges.append((start, end, ", ".join(summary_parts)))
+        return ranges
+
+    @staticmethod
+    def _tag_override(issue: CompatibilityIssue, ranges) -> None:
+        for start, end, summary in ranges:
+            if start <= issue.line_no < end:
+                issue.has_user_override = True
+                issue.override_summary = summary
+                return
 
     @staticmethod
     def _validate_values(idx: int, raw: str,
@@ -449,3 +513,61 @@ def _split_indent_and_newline(raw: str) -> Tuple[str, str]:
 def default_rules_path(app_dir: str) -> str:
     """Standard location of the user-editable rules file."""
     return os.path.join(app_dir, "data", "migration_rules.json")
+
+
+def append_allow_rule(rules_file: str, command: str,
+                       description: str = "") -> bool:
+    """Add an `allow`-type migration rule that whitelists `command`.
+
+    Used by the compatibility dialog's right-click "Whitelist this command"
+    action so users can stop seeing "Unknown command" without editing JSON
+    by hand. Idempotent — silently skips if an enabled allow-rule for the
+    same command already exists.
+    """
+    if not command:
+        return False
+    payload: Dict[str, Any] = {}
+    if os.path.isfile(rules_file):
+        try:
+            with open(rules_file, "r", encoding="utf-8") as f:
+                payload = json.load(f) or {}
+        except (OSError, json.JSONDecodeError) as e:
+            log.warning("Could not read rules %s for append: %s", rules_file, e)
+            payload = {}
+
+    rules = payload.get("rules", []) if isinstance(payload, dict) else []
+    if not isinstance(rules, list):
+        rules = []
+
+    # Idempotency check.
+    for r in rules:
+        if (isinstance(r, dict)
+                and r.get("match_type") == "allow"
+                and r.get("pattern", "").lower() == command.lower()
+                and r.get("enabled", True)):
+            return False
+
+    new_rule = {
+        "id": f"allow-{command}",
+        "description": description or f"Whitelisted '{command}' via right-click.",
+        "match_type": "allow",
+        "pattern": command,
+        "action": "allow",
+        "enabled": True,
+    }
+    rules.append(new_rule)
+    if not isinstance(payload, dict):
+        payload = {}
+    payload.setdefault("version", 1)
+    payload["rules"] = rules
+
+    os.makedirs(os.path.dirname(rules_file), exist_ok=True)
+    tmp = rules_file + ".tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, rules_file)
+    except OSError as e:
+        log.warning("Could not write rules %s: %s", rules_file, e)
+        return False
+    return True

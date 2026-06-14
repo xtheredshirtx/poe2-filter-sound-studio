@@ -1,0 +1,515 @@
+{
+  "version": 1,
+  "_about": "Visual presets for the Visual Tools feature. Reloaded every time the dialog opens — no app restart needed.",
+  "_notes": {
+    "tiers": "MYTHIC, TOP, HIGH, MID, LOW, JUNK. Any tier you omit keeps its code default.",
+    "colors": "RGB or RGBA, each 0-255. Three values = alpha defaults to 255.",
+    "font_size": "12-60. POE2's natural range is roughly 18-45.",
+    "play_effect": "[color, is_temp]. Color must be one of: Red, Green, Blue, Brown, White, Yellow, Cyan, Grey, Orange, Pink, Purple",
+    "minimap": "[size, color, shape]. Size: 0 (large), 1, 2 (small). Shape must be one of: Circle, Diamond, Hexagon, Square, Star, Triangle, Cross, Moon, Raindrop, Kite, Pentagon, UpsideDownHouse",
+    "palettes": "List of full palette entries used by the randomizer. Provide any number; the randomizer picks among them."
+  },
+  "emphasis_presets": {
+    "MYTHIC": {
+      "text_color": [
+        255,
+        200,
+        0,
+        255
+      ],
+      "border_color": [
+        255,
+        100,
+        0,
+        255
+      ],
+      "bg_color": [
+        60,
+        0,
+        0,
+        220
+      ],
+      "font_size": 45,
+      "play_effect": [
+        "Red",
+        false
+      ],
+      "minimap": [
+        0,
+        "Red",
+        "Star"
+      ]
+    },
+    "TOP": {
+      "text_color": [
+        255,
+        215,
+        0,
+        255
+      ],
+      "border_color": [
+        220,
+        150,
+        0,
+        255
+      ],
+      "bg_color": [
+        40,
+        20,
+        0,
+        210
+      ],
+      "font_size": 42,
+      "play_effect": [
+        "Yellow",
+        false
+      ],
+      "minimap": [
+        0,
+        "Yellow",
+        "Diamond"
+      ]
+    },
+    "HIGH": {
+      "text_color": [
+        120,
+        220,
+        255,
+        255
+      ],
+      "border_color": [
+        60,
+        160,
+        255,
+        255
+      ],
+      "bg_color": [
+        0,
+        15,
+        35,
+        200
+      ],
+      "font_size": 38,
+      "play_effect": [
+        "Blue",
+        true
+      ],
+      "minimap": [
+        1,
+        "Blue",
+        "Hexagon"
+      ]
+    },
+    "MID": {
+      "text_color": null,
+      "border_color": null,
+      "bg_color": null,
+      "font_size": 34,
+      "play_effect": null,
+      "minimap": null
+    },
+    "LOW": {
+      "text_color": [
+        170,
+        170,
+        170,
+        255
+      ],
+      "border_color": [
+        80,
+        80,
+        80,
+        200
+      ],
+      "bg_color": null,
+      "font_size": 28,
+      "play_effect": null,
+      "minimap": null
+    },
+    "JUNK": {
+      "text_color": [
+        110,
+        110,
+        110,
+        220
+      ],
+      "border_color": [
+        50,
+        50,
+        50,
+        180
+      ],
+      "bg_color": [
+        15,
+        15,
+        15,
+        160
+      ],
+      "font_size": 22,
+      "play_effect": null,
+      "minimap": null
+    }
+  },
+  "palettes": [
+    {
+      "text": [
+        255,
+        80,
+        80,
+        255
+      ],
+      "border": [
+        200,
+        30,
+        30,
+        255
+      ],
+      "bg": [
+        30,
+        0,
+        0,
+        200
+      ],
+      "effect_color": "Red",
+      "minimap_color": "Red",
+      "minimap_shape": "Diamond",
+      "font_size": 36
+    },
+    {
+      "text": [
+        255,
+        165,
+        0,
+        255
+      ],
+      "border": [
+        200,
+        100,
+        0,
+        255
+      ],
+      "bg": [
+        30,
+        15,
+        0,
+        200
+      ],
+      "effect_color": "Orange",
+      "minimap_color": "Orange",
+      "minimap_shape": "Star",
+      "font_size": 36
+    },
+    {
+      "text": [
+        255,
+        220,
+        0,
+        255
+      ],
+      "border": [
+        200,
+        160,
+        0,
+        255
+      ],
+      "bg": [
+        30,
+        25,
+        0,
+        200
+      ],
+      "effect_color": "Yellow",
+      "minimap_color": "Yellow",
+      "minimap_shape": "Hexagon",
+      "font_size": 36
+    },
+    {
+      "text": [
+        120,
+        255,
+        100,
+        255
+      ],
+      "border": [
+        50,
+        200,
+        50,
+        255
+      ],
+      "bg": [
+        0,
+        30,
+        0,
+        200
+      ],
+      "effect_color": "Green",
+      "minimap_color": "Green",
+      "minimap_shape": "Triangle",
+      "font_size": 36
+    },
+    {
+      "text": [
+        100,
+        255,
+        220,
+        255
+      ],
+      "border": [
+        30,
+        200,
+        180,
+        255
+      ],
+      "bg": [
+        0,
+        30,
+        25,
+        200
+      ],
+      "effect_color": "Cyan",
+      "minimap_color": "Cyan",
+      "minimap_shape": "Moon",
+      "font_size": 36
+    },
+    {
+      "text": [
+        100,
+        200,
+        255,
+        255
+      ],
+      "border": [
+        30,
+        130,
+        220,
+        255
+      ],
+      "bg": [
+        0,
+        15,
+        35,
+        200
+      ],
+      "effect_color": "Blue",
+      "minimap_color": "Blue",
+      "minimap_shape": "Square",
+      "font_size": 36
+    },
+    {
+      "text": [
+        180,
+        130,
+        255,
+        255
+      ],
+      "border": [
+        130,
+        60,
+        220,
+        255
+      ],
+      "bg": [
+        20,
+        0,
+        35,
+        200
+      ],
+      "effect_color": "Purple",
+      "minimap_color": "Purple",
+      "minimap_shape": "Pentagon",
+      "font_size": 36
+    },
+    {
+      "text": [
+        255,
+        150,
+        220,
+        255
+      ],
+      "border": [
+        220,
+        80,
+        170,
+        255
+      ],
+      "bg": [
+        35,
+        0,
+        25,
+        200
+      ],
+      "effect_color": "Pink",
+      "minimap_color": "Pink",
+      "minimap_shape": "Raindrop",
+      "font_size": 36
+    },
+    {
+      "text": [
+        230,
+        180,
+        130,
+        255
+      ],
+      "border": [
+        170,
+        110,
+        60,
+        255
+      ],
+      "bg": [
+        30,
+        20,
+        5,
+        200
+      ],
+      "effect_color": "Brown",
+      "minimap_color": "Brown",
+      "minimap_shape": "Kite",
+      "font_size": 36
+    },
+    {
+      "text": [
+        240,
+        240,
+        240,
+        255
+      ],
+      "border": [
+        180,
+        180,
+        180,
+        255
+      ],
+      "bg": [
+        15,
+        15,
+        15,
+        200
+      ],
+      "effect_color": "White",
+      "minimap_color": "White",
+      "minimap_shape": "Circle",
+      "font_size": 36
+    },
+    {
+      "text": [
+        255,
+        100,
+        100,
+        255
+      ],
+      "border": [
+        255,
+        180,
+        0,
+        255
+      ],
+      "bg": [
+        35,
+        15,
+        0,
+        210
+      ],
+      "effect_color": "Red",
+      "minimap_color": "Orange",
+      "minimap_shape": "Star",
+      "font_size": 36
+    },
+    {
+      "text": [
+        140,
+        255,
+        255,
+        255
+      ],
+      "border": [
+        60,
+        180,
+        255,
+        255
+      ],
+      "bg": [
+        0,
+        20,
+        40,
+        210
+      ],
+      "effect_color": "Cyan",
+      "minimap_color": "Blue",
+      "minimap_shape": "Hexagon",
+      "font_size": 36
+    },
+    {
+      "text": [
+        200,
+        255,
+        120,
+        255
+      ],
+      "border": [
+        150,
+        220,
+        50,
+        255
+      ],
+      "bg": [
+        10,
+        25,
+        0,
+        200
+      ],
+      "effect_color": "Green",
+      "minimap_color": "Yellow",
+      "minimap_shape": "Triangle",
+      "font_size": 36
+    },
+    {
+      "text": [
+        255,
+        200,
+        255,
+        255
+      ],
+      "border": [
+        220,
+        100,
+        255,
+        255
+      ],
+      "bg": [
+        25,
+        0,
+        35,
+        210
+      ],
+      "effect_color": "Pink",
+      "minimap_color": "Purple",
+      "minimap_shape": "Diamond",
+      "font_size": 36
+    },
+    {
+      "text": [
+        255,
+        230,
+        150,
+        255
+      ],
+      "border": [
+        220,
+        170,
+        60,
+        255
+      ],
+      "bg": [
+        35,
+        25,
+        0,
+        210
+      ],
+      "effect_color": "Yellow",
+      "minimap_color": "Orange",
+      "minimap_shape": "Pentagon",
+      "font_size": 36
+    }
+  ]
+}

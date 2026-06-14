@@ -26,6 +26,8 @@ from features.visual_emphasis import (
     load_visual_presets, write_default_presets_file,
     default_visual_presets_path,
 )
+from core.user_overrides import load_overrides, save_overrides
+from ui.tier_detail_dialog import open_tier_detail
 
 
 _TIER_LABELS = {
@@ -52,11 +54,20 @@ class _VisualToolsDialog:
         self.app = app
         self.pal = app.theme_manager.current()
 
-        # Where the user-editable JSON lives. Created on first edit.
-        app_dir = os.path.dirname(os.path.abspath(
-            sys.modules[app.__class__.__module__].__file__))
+        # Where the user-editable JSON lives. Created on first edit. In a
+        # PyInstaller frozen build, sys._MEIPASS gets wiped each launch — so
+        # we deliberately use the exe folder, not __file__.
+        if getattr(sys, "frozen", False):
+            app_dir = os.path.dirname(os.path.abspath(sys.executable))
+        else:
+            app_dir = os.path.dirname(os.path.abspath(
+                sys.modules[app.__class__.__module__].__file__))
         self.presets_path = default_visual_presets_path(app_dir)
         self.presets, self.palettes = load_visual_presets(self.presets_path)
+
+        # Per-filter customizations — loaded from <filter>.filterstudio.json
+        # if it exists, empty otherwise.
+        self.overrides = load_overrides(app.filter_path)
 
         self.dlg = ctk.CTkToplevel(app.root)
         wrapper = ctk.CTkFrame(self.dlg, fg_color=self.pal.panel)
@@ -138,7 +149,7 @@ class _VisualToolsDialog:
     def _reload_presets(self):
         self.presets, self.palettes = load_visual_presets(self.presets_path)
         # Re-plan both tabs with the fresh presets/palettes.
-        self._em_plan = EmphasisStyler(presets=self.presets).plan(self.app.lines)
+        self._em_plan = EmphasisStyler(presets=self.presets, overrides=self.overrides).plan(self.app.lines)
         self._repopulate_emphasis_table()
         self._replan_random()
         self.app._set_status("Visual presets reloaded.")
@@ -148,7 +159,7 @@ class _VisualToolsDialog:
     def _build_emphasize_tab(self, parent):
         pal = self.pal
         # Plan it once on open so the summary is live.
-        self._em_plan = EmphasisStyler(presets=self.presets).plan(self.app.lines)
+        self._em_plan = EmphasisStyler(presets=self.presets, overrides=self.overrides).plan(self.app.lines)
 
         ctk.CTkLabel(parent,
                      text="High-tier items (Uniques, Special Currency, etc.) get the loudest "
@@ -214,28 +225,66 @@ class _VisualToolsDialog:
             self.dlg.destroy()
 
     def _populate_emphasis_swatches(self):
-        # Clear and redraw.
+        # Clear and redraw. Each cell is clickable — opens the tier detail
+        # dialog where the user can pick colors, change font/effect/minimap,
+        # and reassign individual blocks to different tiers.
         for child in self._em_swatch_row.winfo_children():
             child.destroy()
         counts = tier_summary(self._em_plan)
         pal = self.pal
         for tier in (ValueTier.MYTHIC, ValueTier.TOP, ValueTier.HIGH,
                      ValueTier.MID, ValueTier.LOW, ValueTier.JUNK):
-            cell = ctk.CTkFrame(self._em_swatch_row, fg_color=pal.panel,
-                                corner_radius=8, width=140, height=72)
-            cell.pack(side="left", padx=4, pady=4)
-            cell.pack_propagate(False)
-            style = self.presets.get(tier)
+            # The effective style is what we'd actually apply, including overrides.
+            style = self.overrides.tier_presets.get(tier) or self.presets.get(tier)
             swatch_color = _rgba_to_hex(style.text_color) if style and style.text_color else "#cccccc"
             bg = _rgba_to_hex(style.bg_color) if style and style.bg_color else pal.panel_alt
-            inner = tk.Frame(cell, bg=bg, bd=0)
+
+            cell = ctk.CTkFrame(self._em_swatch_row, fg_color=pal.panel,
+                                corner_radius=8, width=140, height=82)
+            cell.pack(side="left", padx=4, pady=4)
+            cell.pack_propagate(False)
+
+            inner = tk.Frame(cell, bg=bg, bd=0, cursor="hand2")
             inner.pack(fill="both", expand=True, padx=2, pady=2)
-            tk.Label(inner, text=_TIER_LABELS[tier],
-                     bg=bg, fg=swatch_color,
-                     font=("Segoe UI Semibold", 11)).pack(pady=(8, 0))
-            tk.Label(inner, text=f"{counts.get(tier, 0)} block(s)",
-                     bg=bg, fg=swatch_color,
-                     font=("Segoe UI", 9)).pack()
+            customized = tier in self.overrides.tier_presets
+            label_text = _TIER_LABELS[tier] + (" ★" if customized else "")
+            top_lbl = tk.Label(inner, text=label_text,
+                               bg=bg, fg=swatch_color, cursor="hand2",
+                               font=("Segoe UI Semibold", 11))
+            top_lbl.pack(pady=(6, 0))
+            mid_lbl = tk.Label(inner, text=f"{counts.get(tier, 0)} block(s)",
+                               bg=bg, fg=swatch_color, cursor="hand2",
+                               font=("Segoe UI", 9))
+            mid_lbl.pack()
+            hint_lbl = tk.Label(inner, text="click to edit",
+                                bg=bg, fg=swatch_color, cursor="hand2",
+                                font=("Segoe UI", 8))
+            hint_lbl.pack(side="bottom", pady=(0, 4))
+
+            # Clicking anywhere in the cell opens the tier detail dialog.
+            handler = lambda _evt, t=tier: self._open_tier_detail(t)
+            for w in (inner, top_lbl, mid_lbl, hint_lbl):
+                w.bind("<Button-1>", handler)
+
+    def _open_tier_detail(self, tier: ValueTier):
+        open_tier_detail(
+            app=self.app, tier=tier,
+            plan=self._em_plan, presets=self.presets,
+            overrides=self.overrides,
+            on_close=self._after_tier_detail,
+        )
+
+    def _after_tier_detail(self):
+        # The detail dialog has saved overrides to disk. Reload from disk so
+        # we always reflect the file's truth (the user might have also edited
+        # the sidecar JSON by hand).
+        self.overrides = load_overrides(self.app.filter_path)
+        # Re-plan both tabs with the new overrides.
+        self._em_plan = EmphasisStyler(
+            presets=self.presets, overrides=self.overrides,
+        ).plan(self.app.lines)
+        self._repopulate_emphasis_table()
+        self._replan_random()
 
     def _update_em_total_label(self):
         total = sum(tier_summary(self._em_plan).values())
