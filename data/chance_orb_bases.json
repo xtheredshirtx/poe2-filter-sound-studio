@@ -1,0 +1,54 @@
+{
+  "version": 3,
+  "_about": "Normal-rarity (white) base items targeted by Chance Orbs for chase uniques in POE2.",
+  "_notes": [
+    "Sourced from Maxroll's 0.5.0 'Return of the Ancients' Best-to-Chance guide and POE2TOOLS' top-10 value tracker (verified Jun 2026).",
+    "IMPORTANT: only NORMAL bases can be chanced — Advanced/Expert variants of the same base CANNOT.",
+    "Every entry here is verified to be a real POE2 base item name. The tablet entries from POE2TOOLS' article ('Precursor Tablet', 'Abyss Precursor Tablet') turned out NOT to be real POE2 base names — those were the article's category labels, and using them in BaseType breaks the filter parser. They have been removed.",
+    "Boss-locked uniques cannot be chanced (e.g. Astramentis from Stellar Amulet is chanceable; others may not be).",
+    "The meta shifts patch-to-patch and as supply changes. Treat this list as a curated baseline.",
+    "Edit `enabled` to include/exclude a base from the in-filter section.",
+    "When adding a new base, double-check the EXACT in-game spelling — POE2 will reject the filter if a BaseType references a base it doesn't recognise.",
+    "Re-run Tools -> 'Add/Update Chance Orb Items' after editing to regenerate the section."
+  ],
+  "_sources": [
+    "https://maxroll.gg/poe2/meta/best-unique-items-to-chance",
+    "https://poe2tools.net/en/orb-of-chance/"
+  ],
+
+  "section_title": "CHANCE ORB ITEMS",
+  "section_id": 9001,
+
+  "style": {
+    "text_color":   [255, 255, 255, 255],
+    "border_color": [255, 215,   0, 255],
+    "bg_color":     [ 50,  30,   0, 220],
+    "font_size":    45,
+    "play_effect":  ["Yellow", false],
+    "minimap":      [0, "Yellow", "Star"],
+    "alert_sound":  [1, 300]
+  },
+
+  "bases": [
+    { "name": "Stellar Amulet",        "notes": "Astramentis, Fixation of Yix",                                  "enabled": true },
+    { "name": "Solar Amulet",          "notes": "Fireflower, Beacon of Azis",                                    "enabled": true },
+    { "name": "Gold Amulet",           "notes": "Eye of Chayula, Serpent's Egg",                                 "enabled": true },
+
+    { "name": "Sapphire Ring",         "notes": "Dream Fragments, Polcirkeln, Whisper of the Brotherhood",       "enabled": true },
+    { "name": "Emerald Ring",          "notes": "Thief's Torment, Death Rush",                                   "enabled": true },
+    { "name": "Gold Ring",             "notes": "Ventor's Gamble, Andvarius, Perandus Seal",                     "enabled": true },
+
+    { "name": "Heavy Belt",            "notes": "Headhunter, Waistgate — top-tier chase target",                 "enabled": true },
+    { "name": "Ornate Belt",           "notes": "Ryslatha's Coil",                                               "enabled": true },
+    { "name": "Utility Belt",          "notes": "Mageblood — the headline chase target",                          "enabled": true },
+
+    { "name": "Moulded Mitts",         "notes": "Atziri's Acuity (gloves)",                                       "enabled": true },
+
+    { "name": "Attuned Wand",          "notes": "Lifesprig",                                                      "enabled": true },
+    { "name": "Forked Spear",          "notes": "Tangletongue",                                                   "enabled": true },
+    { "name": "Shrine Sceptre",        "notes": "Guiding Palm of the Eye / Mind / Heart",                         "enabled": true },
+    { "name": "Sacred Focus",          "notes": "Rathpith Globe",                                                  "enabled": true },
+
+    { "name": "Silver Charm",          "notes": "The Fall of the Axe",                                            "enabled": true }
+  ]
+}

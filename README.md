@@ -117,7 +117,7 @@ The main table columns are:
 
 - `Category`: FilterBlade or NeverSink section name, when the filter contains
   section comments.
-- `Rarity`: Parsed `Rarity` rules, or `Rarity Unknown`.
+- `Rarity`: Parsed `Rarity` rules, or `Any rarity` when the block has no `Rarity` line (currency, waystones, etc. that match by `BaseType`/`Class`).
 - `Type`: `Custom`, `Play`, or `None`.
 - `Sound / ID`: Sound filename for `CustomAlertSound`, sound ID for
   `PlayAlertSound`, or `No sound`.

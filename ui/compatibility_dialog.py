@@ -24,6 +24,7 @@ from core.compatibility import (
     CompatibilityReport, CompatibilityIssue, FilterCompatibilityChecker,
     KIND_UNKNOWN, KIND_RENAME, KIND_DEPRECATED, KIND_BAD_RGB,
     KIND_BAD_VOLUME, KIND_ORPHAN_ACTION, KIND_REPLACE, KIND_REMOVE,
+    append_allow_rule,
 )
 
 
@@ -95,11 +96,15 @@ class _CompatibilityDialog:
         kinds = report.by_kind()
         for k, n in kinds.items():
             summary_bits.append(f"{_KIND_LABELS.get(k, k)}: {n}")
+        conflict_count = sum(1 for i in report.issues if i.has_user_override)
+        conflict_note = (f"   ⚠ {conflict_count} would overwrite your overrides "
+                         "(off by default)") if conflict_count else ""
         summary_text = (
             f"Found {len(report.issues)} issue(s) — "
             f"{report.auto_fixable_count} auto-fixable, "
             f"{report.manual_count} needs your attention.   "
             + "   ".join(summary_bits)
+            + conflict_note
         )
         ctk.CTkLabel(main, text=summary_text,
                      font=("Segoe UI Semibold", 12)).pack(anchor="w", pady=(0, 8))
@@ -129,27 +134,45 @@ class _CompatibilityDialog:
         sb.pack(side="right", fill="y", padx=(0, 4), pady=4)
         self.tree = tree
 
+        # Highlight conflicts (fixes that would clobber a user's tier styling).
+        tree.tag_configure("conflict", background="#5a3a0c", foreground="#ffe49a")
+
         for i, issue in enumerate(report.issues):
-            var = tk.BooleanVar(value=issue.auto_fixable)
+            # Conflict defaults to NOT applied — user must opt in.
+            default_apply = issue.auto_fixable and not issue.has_user_override
+            var = tk.BooleanVar(value=default_apply)
             self._apply_flags[i] = var
-            tree.insert("", "end", iid=str(i), values=(
-                ("✓" if issue.auto_fixable else "—"),
+
+            current_text = _truncate(issue.display_line, 80)
+            if issue.has_user_override:
+                current_text = "⚠ " + current_text
+
+            tags = ("conflict",) if issue.has_user_override else ()
+            message = issue.message
+            if issue.has_user_override:
+                message = (f"Conflicts with your override ({issue.override_summary}). "
+                           + message)
+
+            tree.insert("", "end", iid=str(i), tags=tags, values=(
+                ("✓" if default_apply else "—" if not issue.auto_fixable else "○"),
                 issue.line_no + 1,
                 _KIND_LABELS.get(issue.kind, issue.kind),
-                _truncate(issue.display_line, 80),
+                current_text,
                 _truncate(issue.display_new_line, 80) if issue.auto_fixable else "(manual)",
-                issue.message,
+                message,
             ))
 
         tree.bind("<Double-1>", self._on_double_click)
         tree.bind("<space>", self._on_space_toggle)
+        tree.bind("<Button-3>", self._on_right_click)
 
         # Hint
         ctk.CTkLabel(
             main,
-            text="Double-click or press Space to toggle a fix. "
-                 "Manual issues show '(manual)' — fix them yourself or add a migration rule.",
-            text_color=pal.text_muted,
+            text=("Double-click or Space toggles a fix.  "
+                  "Right-click an Unknown row to whitelist that command "
+                  "(stops it being flagged on future loads)."),
+            text_color=pal.text_muted, wraplength=860, justify="left",
         ).pack(anchor="w", pady=(2, 6))
 
         # ----- Bulk toggles -----
@@ -192,6 +215,75 @@ class _CompatibilityDialog:
             self._toggle_row(int(sel))
         return "break"
 
+    def _on_right_click(self, evt):
+        """Right-click on an Unknown row → offer to whitelist that command."""
+        row = self.tree.identify_row(evt.y)
+        if not row:
+            return
+        try:
+            idx = int(row)
+        except ValueError:
+            return
+        if idx < 0 or idx >= len(self.report.issues):
+            return
+        issue = self.report.issues[idx]
+        if issue.kind != KIND_UNKNOWN:
+            return
+
+        command = self._extract_command(issue.line_text)
+        if not command:
+            return
+
+        menu = tk.Menu(self.tree, tearoff=False)
+        menu.add_command(
+            label=f"Whitelist '{command}' (won't be flagged again)",
+            command=lambda c=command: self._whitelist_command(c),
+        )
+        menu.add_separator()
+        menu.add_command(label="Cancel", command=lambda: None)
+        try:
+            self.tree.selection_set(row)
+            self.tree.focus(row)
+            menu.tk_popup(evt.x_root, evt.y_root)
+        finally:
+            menu.grab_release()
+
+    @staticmethod
+    def _extract_command(line_text: str) -> str:
+        """Return the first whitespace-delimited token from a filter line."""
+        stripped = (line_text or "").strip()
+        # Strip leading "# " in case the issue line is commented out.
+        if stripped.startswith("#"):
+            stripped = stripped.lstrip("#").strip()
+        if not stripped:
+            return ""
+        return stripped.split(None, 1)[0]
+
+    def _whitelist_command(self, command: str):
+        rules_path = self.report.rules_file
+        if not rules_path:
+            messagebox.showinfo(
+                "No rules file location",
+                "The compatibility checker didn't record a rules file path. "
+                "Try restarting the app and re-running the check.",
+            )
+            return
+        if append_allow_rule(rules_path, command,
+                              description=f"Allow POE2 command '{command}' "
+                                           "(whitelisted via right-click)."):
+            messagebox.showinfo(
+                f"Whitelisted '{command}'",
+                f"Added an allow-rule for '{command}' to:\n  {rules_path}\n\n"
+                "Future loads of any filter will no longer flag this command. "
+                "Close this dialog and re-run the check to see it disappear.",
+            )
+        else:
+            messagebox.showinfo(
+                "Already whitelisted",
+                f"'{command}' is already whitelisted in:\n  {rules_path}\n\n"
+                "Close this dialog and re-run the check to see it disappear.",
+            )
+
     def _toggle_row(self, idx: int):
         issue = self.report.issues[idx]
         if not issue.auto_fixable:
@@ -206,8 +298,9 @@ class _CompatibilityDialog:
         self.tree.set(str(idx), "apply", "✓" if var.get() else "○")
 
     def _select_all_fixable(self):
+        # Conflicts stay off — the user can flip them individually.
         for i, issue in enumerate(self.report.issues):
-            if issue.auto_fixable:
+            if issue.auto_fixable and not issue.has_user_override:
                 self._apply_flags[i].set(True)
                 self.tree.set(str(i), "apply", "✓")
 

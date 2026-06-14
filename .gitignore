@@ -2,6 +2,9 @@
 build/
 dist/
 *.spec
+# The packaged exe at the project root — shipped via GitHub releases, not
+# tracked in git history (it's ~70 MB per build).
+*.exe
 
 # Bundled binaries (too large for git; users provide their own or build script bundles)
 ffmpeg/

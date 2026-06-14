@@ -22,12 +22,15 @@ on-screen presentation changes.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import random
 import re
 from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Dict, List, Optional, Tuple
+
+log = logging.getLogger(__name__)
 
 
 # ==================== Tier classification ====================
@@ -82,8 +85,42 @@ _SECTION_KEYWORDS: List[Tuple[str, ValueTier]] = [
     ("hiding rules", ValueTier.JUNK),
 ]
 
-# $tier->t1, t2, ... — NeverSink's tier tag.
+# NeverSink-style tier tags. Two flavours exist and they invert each other:
+#   $tier->t<N>        — value tier; t1 = best, t5 = worst
+#   $tier->stack<N>    — stack-size tier; stack1 = single drop, stack5 = giant
+#                         pile, so stack5 is MORE valuable than stack1
+# Any other prefix (e.g. $tier->whatever1) is treated as unknown and we fall
+# back to section-keyword heuristics rather than guessing.
 _TIER_TAG_RE = re.compile(r"\$tier->([a-zA-Z]+)(\d+)", re.IGNORECASE)
+
+
+def _t_tier_to_value(n: int) -> ValueTier:
+    """Map a standard t<N> tier number to a ValueTier (t1 = best, t5 = worst)."""
+    if n <= 1:
+        return ValueTier.TOP
+    if n == 2:
+        return ValueTier.HIGH
+    if n == 3:
+        return ValueTier.MID
+    if n == 4:
+        return ValueTier.LOW
+    return ValueTier.JUNK
+
+
+def _stack_tier_to_value(n: int) -> ValueTier:
+    """Map a stack<N> tier number to a ValueTier.
+
+    Bigger N = bigger stack = MORE valuable (the inverse of t-tiers).
+    """
+    if n >= 5:
+        return ValueTier.TOP
+    if n == 4:
+        return ValueTier.HIGH
+    if n == 3:
+        return ValueTier.MID
+    if n == 2:
+        return ValueTier.LOW
+    return ValueTier.JUNK
 
 
 def classify_block(header: str, section_name: str = "") -> ValueTier:
@@ -92,27 +129,31 @@ def classify_block(header: str, section_name: str = "") -> ValueTier:
     `header` is the full Show/Hide line (we read the inline $tier-> tag from
     it). `section_name` comes from the nearest preceding `# [[NNNN]] Title`
     marker — it's how NeverSink groups blocks.
+
+    Order of decisions:
+      1. Hide → HIDDEN.
+      2. `$tier->t<N>` or `$tier->stack<N>` — explicit author grade wins.
+         (Any other prefix is ignored; we don't pretend to know what
+         `$tier->portal3` means.)
+      3. Section-name keywords (the broadest signal).
+      4. Default → MID.
     """
     header_stripped = (header or "").strip()
     if header_stripped.lower().startswith("hide"):
         return ValueTier.HIDDEN
 
-    # Tier tag wins over section heuristics — it's the author's explicit grade.
     m = _TIER_TAG_RE.search(header_stripped)
     if m:
+        prefix = m.group(1).lower()
         try:
             n = int(m.group(2))
         except ValueError:
             n = 5
-        if n <= 1:
-            return ValueTier.TOP
-        if n == 2:
-            return ValueTier.HIGH
-        if n == 3:
-            return ValueTier.MID
-        if n == 4:
-            return ValueTier.LOW
-        return ValueTier.JUNK
+        if prefix == "t":
+            return _t_tier_to_value(n)
+        if prefix == "stack":
+            return _stack_tier_to_value(n)
+        # Unknown prefix: deliberately fall through so we don't mis-classify.
 
     section_lower = (section_name or "").lower()
     for needle, tier in _SECTION_KEYWORDS:
@@ -412,26 +453,83 @@ class StyleChange:
     end_idx: int
     tier: ValueTier
     style: BlockStyle
+    # Signature used to look up user overrides; set by stylers that consult them.
+    signature: str = ""
+    # True when this block has a user-set tier or style override.
+    has_override: bool = False
+    # The classifier's heuristic tier before any override — useful for the UI
+    # to show "moved from MID to TOP".
+    base_tier: Optional[ValueTier] = None
 
 
 class EmphasisStyler:
-    """Rule-based: classify each block, look up preset, plan a restyle."""
+    """Rule-based: classify each block, look up preset, plan a restyle.
+
+    Accepts an optional `overrides` object that supplies per-tier preset
+    overrides AND per-block tier/style overrides. Resolution order, highest
+    priority first:
+
+        1. Per-block style override (the user picked exact colors for THIS block)
+        2. Per-block tier override + tier preset (user moved block to a tier)
+        3. Tier preset override (user customized that tier's styling)
+        4. Code default preset for the heuristic tier
+
+    The styler imports core.user_overrides lazily to avoid a circular import
+    at module load time.
+    """
 
     def __init__(self, presets: Optional[Dict[ValueTier, BlockStyle]] = None,
-                 skip_hidden: bool = True):
+                 skip_hidden: bool = True,
+                 overrides=None):
         self.presets = presets if presets is not None else EMPHASIS_PRESETS
         self.skip_hidden = skip_hidden
+        self.overrides = overrides
 
     def plan(self, lines: List[str]) -> List[StyleChange]:
+        from core.user_overrides import block_signature  # lazy: avoid cycle
+
         changes: List[StyleChange] = []
-        for start, end, header, section, _block in iter_blocks(lines):
-            tier = classify_block(header, section)
-            if tier == ValueTier.HIDDEN and self.skip_hidden:
+        for start, end, header, section, block in iter_blocks(lines):
+            base_tier = classify_block(header, section)
+
+            sig = block_signature(block)
+            block_override = None
+            tier_override_used = False
+            if self.overrides is not None:
+                block_override = self.overrides.block_overrides.get(sig)
+
+            # 1) Final tier: user's per-block tier override wins.
+            effective_tier = base_tier
+            if block_override is not None and block_override.tier is not None:
+                effective_tier = block_override.tier
+                tier_override_used = True
+
+            if effective_tier == ValueTier.HIDDEN and self.skip_hidden:
                 continue
-            style = self.presets.get(tier)
+
+            # 2) Final style: per-block style > tier preset override > tier preset.
+            style: Optional[BlockStyle] = None
+            if block_override is not None and block_override.style is not None:
+                style = block_override.style
+            elif self.overrides is not None and effective_tier in self.overrides.tier_presets:
+                style = self.overrides.tier_presets[effective_tier]
+            else:
+                style = self.presets.get(effective_tier)
+
             if style is None:
                 continue
-            changes.append(StyleChange(start, end, tier, style))
+
+            has_override = block_override is not None or (
+                self.overrides is not None
+                and effective_tier in self.overrides.tier_presets
+            )
+            changes.append(StyleChange(
+                start_idx=start, end_idx=end,
+                tier=effective_tier, style=style,
+                signature=sig,
+                has_override=has_override or tier_override_used,
+                base_tier=base_tier,
+            ))
         return changes
 
 
@@ -624,7 +722,7 @@ def load_visual_presets(path: str) -> Tuple[Dict[ValueTier, BlockStyle],
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError) as e:
-        print(f"[visual_emphasis] Could not read {path}: {e} — using code defaults")
+        log.warning("Could not read presets %s: %s — using code defaults", path, e)
         return dict(EMPHASIS_PRESETS), tuple(CURATED_PALETTES)
 
     # Presets: start from code defaults, overlay anything the user supplied.

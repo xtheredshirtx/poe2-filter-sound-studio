@@ -162,7 +162,9 @@ class FilterParser:
         Returns:
             Tuple of (rarity, class_values, basetype_values, context_lines)
         """
-        rarity = "Rarity Unknown"
+        # No Rarity line in the block = it matches every rarity (currency,
+        # waystones, etc.). The old "Unknown" string read as if data were missing.
+        rarity = "Any rarity"
         class_values = []
         basetype_values = []
         context_lines = []
