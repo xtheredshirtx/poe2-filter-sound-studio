@@ -1,8 +1,102 @@
 # LLM Context Log
 
 Drop-in briefing for any future LLM picking up this project. Read this first,
-then `CLAUDE.md` (working preferences), then dig into code. Everything below
-documents what's in the repo *as of the end of the 2026-06-13 session*.
+then `CLAUDE.md` (working preferences), then dig into code. The dated
+**Session log** directly below captures the most recent work; sections 1–10
+further down are the older 2026-06-13 snapshot and remain accurate unless a
+later session entry says otherwise.
+
+---
+
+## Session log (newest first)
+
+### 2026-06-21 — Item Visibility tab
+
+**Goal:** a beginner-friendly tab to flip each filter block between
+**Show** (item drops on the ground) and **Hide** (filter hides it) without
+hand-editing filter text. Hard invariant: changing visibility rewrites ONLY the
+`Show`/`Hide` word in the block header — conditions, sounds, colors,
+`PlayEffect`, `MinimapIcon`, comments, and line endings are all preserved.
+
+**Status:** code committed on branch `feature/item-visibility-tab`, pushed,
+[PR #10](https://github.com/xtheredshirtx/poe2-filter-sound-studio/pull/10)
+open and **NOT merged**. A test build `App_v23.exe` (71 MB, onefile+ffmpeg) was
+produced and copied to the repo root for the user to test. `version.txt` bumped
+22→23 locally (gitignored build artifacts: `App_v23.exe`, `dist/`, `build/`;
+`version.txt` change left uncommitted, not on the PR branch). Full pytest suite
+green (138 tests incl. 17 new); `py_compile` clean.
+
+**Added:**
+- [features/visibility_manager.py](features/visibility_manager.py) — all core
+  logic, no UI:
+  - `iter_filter_blocks(lines)` — **shared** Show/Hide block-boundary walker
+    (generator of `RawBlock`). Tracks `# [[NNNN]]`/`#  [NNNN]` section +
+    subsection markers on every line (mirrors `main.refresh_filter_data`), so a
+    section header sitting between a block body and the next header attaches to
+    the *following* block. Trims trailing blanks/section markers from each
+    block's `raw_lines`. **Reuse this for any future block-walking tool.**
+  - `VisibilityBlockView` — one table row (start/end line, current+desired
+    visibility, category/subsection, rarity, classes, base_types, item_level,
+    stack_size, sound/effect/minimap summaries, context, raw_lines, risk_level,
+    risk_reasons, stable_key).
+  - `VisibilityChange` + `ApplyResult` dataclasses.
+  - `header_word()`, `rewrite_header_word()` — pure header swap that preserves
+    indentation, trailing comment, and exact EOL (`\n`/`\r\n`/`\r`/none) via
+    `split_eol()`.
+  - `assess_risk()` — High/Medium/Low. Reuses `visual_emphasis.classify_block`
+    tier + valuable-keyword scan (currency, waystone, map, unique, gem, rune,
+    soul core, idol, breach, expedition, boss, divine, exalted, mirror, …) +
+    structural checks (PlayEffect/MinimapIcon, font ≥ 40, no Class+no BaseType
+    = broad/High).
+  - `smart_group_for()` + `SMART_GROUPS` — coarse buckets (Currency,
+    Waystones/Maps, Uniques, Gems, Gear, Flasks/Charms, Runes/Soul Cores/Idols,
+    Other) for the Group dropdown.
+  - `VisibilityManager` — holds `blocks`, binds to the app's *same* `lines` list
+    object. Pending changes live only on `view.desired_visibility` until
+    `apply()`. `apply()` order: validate every target line still starts with
+    Show/Hide (drifted lines skipped, never corrupted) → `make_backup(label=
+    "visibility")` → rewrite header words in place → `save_filter_file(create_
+    backup=False)` → `rebuild()`.
+- [ui/visibility_manager_tab.py](ui/visibility_manager_tab.py) —
+  `VisibilityManagerTab(parent, app)`. Control bar (search + Visibility /
+  Section / Group dropdowns + Refresh), ttk table, per-row right-click menu
+  (Set Shown/Hidden, Reset, Preview raw block), double-click raw-block preview
+  (highlights the line that will change), bulk ops (scoped to selection, or all
+  *visible* rows when nothing selected), Revert Unsaved, and a combined
+  preview+confirmation dialog (`_show_review_dialog`) listing planned changes +
+  Show→Hide/Hide→Show counts + high-risk count + file path + backup location +
+  warnings (hiding valuables / ≥15 blocks at once). Uses native ttk extended
+  multi-select as the "selection" (ttk can't embed per-cell checkboxes). Tiny
+  `_Tooltip` helper (CTk has none). Registers widgets/treeview tags with
+  `app.theme_manager` so it themes natively.
+- [tests/test_visibility.py](tests/test_visibility.py) — 17 tests covering the
+  10 required scenarios (Show↔Hide single-line change, preservation of
+  conditions/sound/color/effect/minimap/comments/EOL, bulk only-selected,
+  revert never edits lines, filter is read-only, risk flagging, section-comment
+  parsing, no-BaseType, multi-BaseType, header-drift skip).
+
+**Modified:**
+- [main.py](main.py) — added `tab_visibility = self.tabs.add("Item Visibility")`
+  (between Editor and Merge); instantiates `self.visibility_tab =
+  VisibilityManagerTab(...)` in `setup_gui` (guarded try/except); calls
+  `self.visibility_tab.refresh()` at the end of `refresh_filter_data()` so the
+  tab re-syncs from `self.lines` after every load/save and stays consistent
+  with all other tabs.
+- [README.md](README.md) — new "Item Visibility Tab" section + project-layout
+  entries.
+
+**Gotchas / notes for next LLM:**
+- The manager mutates `app.lines` **in place** (same object), so an applied
+  toggle is visible to the editor tab immediately; the UI then also calls
+  `app.refresh_filter_data()` to repopulate everything.
+- Source of truth for *which line to edit* is always `start_line` in the live
+  file. `stable_key` (ignores the Show/Hide word, unlike
+  `user_overrides.block_signature` which folds it in) is identity-for-matching
+  only, never used to pick the edit target.
+- `Refresh`, `Revert Unsaved`, and any app reload all **drop** pending toggles
+  (rebuild from disk) — by design, predictable over clever.
+- If the user merges PR #10, remember `version.txt` is currently dirty (23) and
+  the test EXE at repo root is gitignored.
 
 ---
 
@@ -404,4 +498,4 @@ python -c "from core.user_overrides import block_signature; print(block_signatur
 
 ---
 
-*End of context log. Last updated 2026-06-13.*
+*End of context log. Last updated 2026-06-21 (Item Visibility tab — see Session log at top).*
