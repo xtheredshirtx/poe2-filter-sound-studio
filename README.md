@@ -51,6 +51,8 @@ App identity in code:
 - Tracks missing and unused sound files in the filter folder.
 - Migrates sounds from an old season filter into a new season filter with fuzzy
   block matching.
+- Flips individual blocks between **Show** and **Hide** from a dedicated
+  **Item Visibility** tab — no manual text editing.
 - Saves with timestamped backups by default.
 
 ## Quick Start
@@ -449,6 +451,57 @@ If the smart merge UI cannot load, `main.py` falls back to a legacy exact-match
 merge. Legacy mode compares exact block signatures and replaces sounds in the
 left filter with sounds from the middle filter.
 
+## Item Visibility Tab
+
+The `Item Visibility` tab is a beginner-friendly way to choose whether each item
+rule is **Shown in game** (the item can appear on the ground) or **Hidden in
+game** (the filter hides it). It only ever changes the `Show`/`Hide` word at the
+top of a block — it never deletes rules, conditions, sounds, colors,
+`PlayEffect`, or `MinimapIcon` lines.
+
+What you see:
+
+- A note at the top stating exactly what the tab does (and does not) change.
+- A control bar with a search box and three dropdowns — **Visibility** (All /
+  Currently Shown / Currently Hidden), **Section**, and **Group** (Currency,
+  Waystones/Maps, Uniques, Gems, Gear, Flasks/Charms, Runes/Soul Cores/Idols,
+  Other).
+- A table with one row per block: a pending-change marker, the current and
+  desired visibility, a **Risk** label, the section/subsection, and the block's
+  rarity, class, base types, level conditions, stack size, sound, effect/minimap
+  summary, and item context.
+
+How to use it:
+
+1. Load a filter (the tab fills in automatically and refreshes after every
+   load/save).
+2. Select one or more rows (Ctrl-click / Shift-click), or use **Select visible**.
+3. Click **Set to Shown** / **Set to Hidden**, or right-click a row for the same
+   actions plus **Reset to current** and **Preview raw block…**. Double-clicking
+   a row also opens the raw-block preview, which highlights the exact line that
+   will change. Bulk actions apply to the selected rows, or to all currently
+   visible rows when nothing is selected.
+4. Toggles are staged in memory only — nothing is written yet. The pending count
+   shows in the status line. **Revert Unsaved** clears every pending toggle.
+5. Click **Apply Changes…** to open a review dialog. It lists every planned
+   change (line, section, item, From → To, risk), summarizes how many blocks go
+   Show→Hide and Hide→Show, how many are high-risk, the filter path, and where
+   the backup will be written. It warns before hiding valuable categories
+   (currency, waystones/maps, uniques, gems, blocks with drop beams/minimap
+   icons, broad catch-all blocks) or hiding many blocks at once.
+6. Confirm to apply. A backup is created first, only the header words are
+   rewritten, the file is saved atomically, and every tab refreshes.
+
+Risk levels are heuristics. **High** flags valuable sections, high value tiers,
+blocks with `PlayEffect`/`MinimapIcon`/large fonts, and very broad blocks (no
+`Class` and no `BaseType`). **Medium** flags broad-but-classed blocks, rare gear,
+and blocks with active sounds. **Low** is everything else.
+
+The logic lives in `features/visibility_manager.py` (block walking, metadata,
+risk, and the atomic apply) and the UI in `ui/visibility_manager_tab.py`. The
+block-boundary walker `iter_filter_blocks()` is shared so future tools can reuse
+the same parsing.
+
 ## Saving And Backups
 
 Most write operations call `core.file_operations.save_filter_file()`.
@@ -541,11 +594,13 @@ POE2 Item Filter Sound Replacer/
     color_editor.py               Color line editing helpers
     smart_merge.py                Similarity scoring and migration executor
     smart_merge_ui.py             Merge tab controller and UI
+    visibility_manager.py         Item Visibility block walking, risk, apply
     themes.py                     Live palette system
     batch_operations.py           Programmatic template and batch helpers
 
   ui/
     dialogs.py                    Color picker, item preview, confirmation UI
+    visibility_manager_tab.py     Item Visibility tab (Show/Hide management)
     compatibility_dialog.py       Migration-rule UI
     visual_tools_dialog.py        Emphasize-by-tier / randomizer UI
     economy_tier_ui.py            Economy Tier Visual Preset dialog

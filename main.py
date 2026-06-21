@@ -327,6 +327,7 @@ class FilterSoundEditor:
         self.tabs = ctk.CTkTabview(self.frame, corner_radius=12)
         self.tabs.pack(fill="both", expand=True)
         tab_edit = self.tabs.add("Editor")
+        tab_visibility = self.tabs.add("Item Visibility")
         tab_merge = self.tabs.add("Merge")
 
         # ===== Editor tab =====
@@ -716,6 +717,21 @@ class FilterSoundEditor:
         tm.register_widget(self.hint_label, tm.ROLE_TEXT_MUTED)
         tm.register_widget(self.selection_counter, tm.ROLE_TEXT)
         tm.register_widget(status_bar, tm.ROLE_PANEL_ALT)
+
+        # ===== Item Visibility tab =====
+        # Lets the user flip blocks between Show/Hide without editing text.
+        # Refreshed from self.lines after every load via refresh_filter_data().
+        self.visibility_tab = None
+        try:
+            from ui.visibility_manager_tab import VisibilityManagerTab
+            self.visibility_tab = VisibilityManagerTab(tab_visibility, self)
+        except Exception as e:
+            log.exception("Item Visibility tab failed to initialize")
+            ctk.CTkLabel(
+                tab_visibility,
+                text=f"Item Visibility tab unavailable:\n{e}",
+                justify="left",
+            ).pack(padx=20, pady=20)
 
         # ===== Merge tab (Smart Merge) =====
         try:
@@ -1304,6 +1320,15 @@ class FilterSoundEditor:
         )
         # Refresh the health pill (silent; may overwrite the status if anything is broken)
         self._update_health_indicator()
+
+        # Keep the Item Visibility tab in sync with the freshly parsed filter so
+        # every tab reflects the same on-disk state.
+        vt = getattr(self, "visibility_tab", None)
+        if vt is not None:
+            try:
+                vt.refresh()
+            except Exception:
+                log.exception("Failed to refresh Item Visibility tab")
 
     def _parse_block_meta(self, block):
         """Parse block metadata."""
